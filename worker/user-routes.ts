@@ -102,4 +102,64 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
     ];
     return ok(c, mockLeaderboard);
   });
+
+  // IMAGE UPLOAD
+  app.post('/api/upload-image', async (c) => {
+    try {
+      const formData = await c.req.formData();
+      const image = formData.get('image') as File;
+      
+      if (!image) {
+        return bad(c, 'No image file provided');
+      }
+
+      // Validate file type
+      if (!image.type.startsWith('image/')) {
+        return bad(c, 'File must be an image');
+      }
+
+      // Validate file size (10MB max)
+      if (image.size > 10 * 1024 * 1024) {
+        return bad(c, 'File size must be less than 10MB');
+      }
+
+      // Generate unique filename
+      const timestamp = Date.now();
+      const randomString = Math.random().toString(36).substring(2, 15);
+      const fileExtension = image.name.split('.').pop() || 'jpg';
+      const fileName = `token-images/${timestamp}-${randomString}.${fileExtension}`;
+
+      // Upload to R2
+      await c.env.blaze_it_token_images.put(fileName, image.stream(), {
+        httpMetadata: {
+          contentType: image.type,
+        },
+      });
+
+      // Return the public URL using R2's public URL format
+      const publicUrl = `https://pub-f014c8e3a8617233380c6f6160ed8cf9.r2.dev/${fileName}`;
+      
+      return ok(c, { url: publicUrl, fileName });
+    } catch (error) {
+      console.error('Image upload error:', error);
+      return bad(c, 'Failed to upload image');
+    }
+  });
+
+  app.delete('/api/delete-image', async (c) => {
+    try {
+      const { key } = await c.req.json();
+      
+      if (!key) {
+        return bad(c, 'Image key is required');
+      }
+
+      await c.env.blaze_it_token_images.delete(key);
+      
+      return ok(c, { success: true });
+    } catch (error) {
+      console.error('Image deletion error:', error);
+      return bad(c, 'Failed to delete image');
+    }
+  });
 }

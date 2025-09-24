@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { usePortfolioStore } from "@/stores/portfolioStore";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Coins } from "lucide-react";
 import { Link } from "react-router-dom";
 export function ProfileDropdown() {
   const { disconnect, account } = useWallet();
@@ -24,6 +24,12 @@ export function ProfileDropdown() {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent className="rounded-none border-2 border-blaze-black bg-blaze-white font-mono text-lg w-56">
+          <DropdownMenuItem asChild className="cursor-pointer focus:bg-blaze-orange focus:text-blaze-black h-12 flex items-center gap-2">
+            <Link to="/create-token" className="flex items-center gap-2">
+              <Coins className="w-4 h-4" />
+              Create Token
+            </Link>
+          </DropdownMenuItem>
           <DropdownMenuItem asChild className="cursor-pointer focus:bg-blaze-orange focus:text-blaze-black h-12">
             <Link to="/create-quest">Create Quest</Link>
           </DropdownMenuItem>

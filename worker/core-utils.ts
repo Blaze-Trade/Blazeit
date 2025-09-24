@@ -8,6 +8,7 @@ import type { Context } from "hono";
 
 export interface Env {
   GlobalDurableObject: DurableObjectNamespace<GlobalDurableObject>;
+  blaze_it_token_images: R2Bucket;
 }
 
 type Doc<T> = { v: number; data: T };

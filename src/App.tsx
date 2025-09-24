@@ -11,6 +11,7 @@ import { QuestPage } from '@/pages/QuestPage';
 import { QuestDetailPage } from '@/pages/QuestDetailPage';
 import { WatchlistPage } from '@/pages/WatchlistPage';
 import { CreateQuestPage } from '@/pages/CreateQuestPage'; // New import
+import { TokenCreationPage } from '@/pages/TokenCreationPage';
 import { AptosWalletAdapterProvider } from '@aptos-labs/wallet-adapter-react';
 import { useEffect, useMemo, useState } from 'react';
 const router = createBrowserRouter([
@@ -42,6 +43,10 @@ const router = createBrowserRouter([
       {
         path: "create-quest", // New route
         element: <CreateQuestPage />,
+      },
+      {
+        path: "create-token",
+        element: <TokenCreationPage />,
       },
     ],
   },
