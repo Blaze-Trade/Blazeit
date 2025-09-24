@@ -1,8 +1,14 @@
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { toast } from "sonner";
-import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
-const aptosConfig = new AptosConfig({ network: Network.TESTNET });
-const aptos = new Aptos(aptosConfig);
+
+let aptosSingleton: any | null = null;
+async function getAptosClient() {
+  if (aptosSingleton) return aptosSingleton;
+  const mod = await import("@aptos-labs/ts-sdk");
+  const config = new mod.AptosConfig({ network: mod.Network.TESTNET });
+  aptosSingleton = new mod.Aptos(config);
+  return aptosSingleton;
+}
 export function useAptos() {
   const { signAndSubmitTransaction } = useWallet();
   const simulateTransaction = async (description: string, payload?: any) => {
@@ -15,7 +21,8 @@ export function useAptos() {
         functionArguments: [],
       };
       const result = await signAndSubmitTransaction(mockPayload);
-      await aptos.waitForTransaction({ transactionHash: result.hash });
+      const client = await getAptosClient();
+      await client.waitForTransaction({ transactionHash: result.hash });
       toast.success(`${description} successful!`, {
         id: toastId,
         description: `Transaction: ${result.hash.slice(0, 10)}...`,

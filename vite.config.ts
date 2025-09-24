@@ -8,11 +8,22 @@ import { cloudflare } from "@cloudflare/vite-plugin";
 export default defineConfig({
   plugins: [react(), cloudflare()],
   build: {
-    minify: true,
-    sourcemap: 'inline', // Use inline source maps for better error reporting
+    minify: false,
+    // Disable inline source maps in production to keep asset sizes small
+    sourcemap: false,
     rollupOptions: {
       output: {
-        sourcemapExcludeSources: false, // Include original source in source maps
+        sourcemapExcludeSources: false, // Include original source in source maps if sourcemaps are enabled
+        // Split large vendor bundles to keep each asset under 25 MiB for Cloudflare
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('@aptos-labs')) return 'vendor-aptos';
+            if (id.includes('react')) return 'vendor-react';
+            if (id.includes('@radix-ui')) return 'vendor-radix';
+            if (id.includes('hono')) return 'vendor-hono';
+            return 'vendor';
+          }
+        },
       },
     },
   },
