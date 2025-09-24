@@ -4,7 +4,7 @@ A gamified crypto trading platform with a brutalist, swipe-based UI and competit
 
 Blaze It is a gamified crypto trading and portfolio management platform built on the Aptos blockchain, designed with a raw, brutalist aesthetic. The core experience revolves around a 'Tinder-for-tokens' swipe interface, making investment decisions fast, intuitive, and engaging. The application is divided into three main modules: 'Trade', where users execute real or simulated transactions by swiping on token cards; 'Analysis', a stark dashboard for tracking portfolio performance; and 'Quest', a competitive mode where users build virtual portfolios to compete for centralized prize pools. The entire UI embraces brutalism, featuring oversized typography, a high-contrast color scheme, asymmetrical layouts, and sharp, unapologetic geometric forms, creating a visually striking and memorable user experience.
 
-[cloudflarebutton]
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/codewithmirza/Blazeit)
 
 ## Key Features
 
@@ -85,7 +85,7 @@ This project is configured for seamless deployment to Cloudflare's global networ
 
 Alternatively, you can deploy directly from your GitHub repository with a single click.
 
-[cloudflarebutton]
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/codewithmirza/Blazeit)
 
 ## Project Structure
 
