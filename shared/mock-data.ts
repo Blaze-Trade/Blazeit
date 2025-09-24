@@ -1,0 +1,46 @@
+import type { Token, Quest } from './types';
+export const MOCK_TOKENS: Token[] = [
+  { id: 'aptos', symbol: 'APT', name: 'Aptos', price: 8.83, change24h: 2.15, marketCap: 3900000000, logoUrl: 'https://s2.coinmarketcap.com/static/img/coins/64x64/21794.png' },
+  { id: 'sui', symbol: 'SUI', name: 'Sui', price: 1.03, change24h: -1.45, marketCap: 2400000000, logoUrl: 'https://s2.coinmarketcap.com/static/img/coins/64x64/20947.png' },
+  { id: 'bitcoin', symbol: 'BTC', name: 'Bitcoin', price: 67500.00, change24h: 0.5, marketCap: 1300000000000, logoUrl: 'https://s2.coinmarketcap.com/static/img/coins/64x64/1.png' },
+  { id: 'ethereum', symbol: 'ETH', name: 'Ethereum', price: 3500.00, change24h: 1.2, marketCap: 420000000000, logoUrl: 'https://s2.coinmarketcap.com/static/img/coins/64x64/1027.png' },
+  { id: 'solana', symbol: 'SOL', name: 'Solana', price: 150.00, change24h: -3.0, marketCap: 69000000000, logoUrl: 'https://s2.coinmarketcap.com/static/img/coins/64x64/5426.png' },
+];
+export const MOCK_QUESTS: Quest[] = [
+  {
+    id: "q1",
+    name: "Aptos Arena: The Alpha Run",
+    entryFee: 10,
+    prizePool: 1000,
+    duration: "7 Days",
+    participants: 42,
+    status: "active",
+  },
+  {
+    id: "q2",
+    name: "DeFi Degens: High-Risk Rumble",
+    entryFee: 50,
+    prizePool: 15000,
+    duration: "3 Days",
+    participants: 121,
+    status: "upcoming",
+  },
+  {
+    id: "q3",
+    name: "Meme Coin Mayhem",
+    entryFee: 5,
+    prizePool: 500,
+    duration: "24 Hours",
+    participants: 350,
+    status: "upcoming",
+  },
+  {
+    id: "q4",
+    name: "The Genesis Block Challenge",
+    entryFee: 100,
+    prizePool: 50000,
+    duration: "30 Days",
+    participants: 8,
+    status: "ended",
+  },
+];
