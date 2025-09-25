@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 3000",
+    "dev:worker": "wrangler dev --port 8787",
+    "dev:full": "concurrently \"npm run dev:worker\" \"npm run dev\"",
     "build": "vite build",
     "lint": "eslint --cache -f json --quiet .",
     "preview": "bun run build && vite preview --host 0.0.0.0 --port ${PORT:-4173}",
@@ -106,6 +108,7 @@
     "@vitest/ui": "^3.2.4",
     "aptos": "^1.21.0",
     "autoprefixer": "^10.4.21",
+    "concurrently": "^9.2.1",
     "eslint": "^9.31.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.19",
