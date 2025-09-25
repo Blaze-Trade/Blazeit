@@ -119,7 +119,7 @@ export function TradePage() {
               CONTRACT_FUNCTIONS.launchpad.buyToken,
               [], // No type arguments
               [
-                "0x0bdb81a0137733aad37c06fa51a5936ffa4a8c57bde190c5174c66afc2725bb6",
+                "0x3d4b170229fcef725b913cdb9a4bfbddcdea07b9b1b1b230ca19f5367a0c7df8",
                 1000000,
               ]
             ),
