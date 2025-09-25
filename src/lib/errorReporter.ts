@@ -620,7 +620,7 @@ class ErrorReporter {
         throw new Error(result.error || "Unknown error occurred");
       }
 
-      console.log(
+      console.error(
         "[ErrorReporter] Error reported successfully:",
         error.message
       );

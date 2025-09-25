@@ -1,12 +1,16 @@
+import { supabaseStorageService } from "./supabase-storage";
+
 export interface ImageUploadResult {
   success: boolean;
   url?: string;
+  filename?: string;
+  size?: number;
   error?: string;
 }
 
 export class ImageUploadService {
   private static instance: ImageUploadService;
-  
+
   public static getInstance(): ImageUploadService {
     if (!ImageUploadService.instance) {
       ImageUploadService.instance = new ImageUploadService();
@@ -16,86 +20,58 @@ export class ImageUploadService {
 
   async uploadImage(file: File): Promise<ImageUploadResult> {
     try {
-      // Create FormData for the upload
-      const formData = new FormData();
-      formData.append('image', file);
-      
-      // Generate a unique filename
-      const timestamp = Date.now();
-      const randomString = Math.random().toString(36).substring(2, 15);
-      const fileExtension = file.name.split('.').pop() || 'jpg';
-      const fileName = `token-images/${timestamp}-${randomString}.${fileExtension}`;
-      
-      // Upload to our worker endpoint
-      const response = await fetch('/api/upload-image', {
-        method: 'POST',
-        body: formData,
-      });
+      // Use Supabase storage service
+      const result = await supabaseStorageService.uploadImage(file);
 
-
-      if (!response.ok) {
-        let errorMessage = 'Upload failed';
-        try {
-          const errorData = await response.json();
-          errorMessage = errorData.error || errorMessage;
-        } catch (jsonError) {
-          // If JSON parsing fails, use the response status text
-          errorMessage = response.statusText || errorMessage;
-        }
-        throw new Error(errorMessage);
-      }
-
-      let result;
-      try {
-        const responseText = await response.text();
-        result = JSON.parse(responseText);
-      } catch (jsonError) {
-        console.error('JSON parsing failed:', jsonError);
-        // If JSON parsing fails, create a mock response for development
-        console.warn('JSON parsing failed, using mock response for development');
-        result = {
+      if (result.success) {
+        return {
           success: true,
-          url: `https://via.placeholder.com/400x400/FF6B35/FFFFFF?text=${encodeURIComponent(file.name)}`,
-          filename: file.name,
-          size: file.size
+          url: result.url,
+          filename: result.filename,
+          size: result.size,
+        };
+      } else {
+        console.error("Supabase upload failed:", result.error);
+        return {
+          success: false,
+          error: result.error || "Upload failed",
         };
       }
-      
-      const imageUrl = result.data?.url || result.url;
-      if (!imageUrl) {
-        throw new Error('No image URL returned from server');
-      }
-      
-      return {
-        success: true,
-        url: imageUrl,
-      };
     } catch (error) {
-      console.error('Image upload error:', error);
+      console.error("Image upload error:", error);
+
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Upload failed',
+        error:
+          error instanceof Error ? error.message : "Unknown error occurred",
       };
     }
   }
 
   async deleteImage(imageUrl: string): Promise<boolean> {
     try {
-      // Extract the key from the URL
+      // Extract filename from URL
       const url = new URL(imageUrl);
-      const key = url.pathname.substring(1); // Remove leading slash
-      
-      const response = await fetch('/api/delete-image', {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ key }),
-      });
+      const pathParts = url.pathname.split("/");
+      const fileName = pathParts[pathParts.length - 1];
 
-      return response.ok;
+      if (!fileName) {
+        console.error("Could not extract filename from URL:", imageUrl);
+        return false;
+      }
+
+      // Use Supabase storage service to delete
+      const success = await supabaseStorageService.deleteImage(fileName);
+
+      if (success) {
+        console.log("Image deleted successfully:", fileName);
+      } else {
+        console.error("Failed to delete image:", fileName);
+      }
+
+      return success;
     } catch (error) {
-      console.error('Image deletion error:', error);
+      console.error("Image deletion error:", error);
       return false;
     }
   }
