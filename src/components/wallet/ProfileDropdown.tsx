@@ -2,7 +2,8 @@ import { Button } from "@/components/ui/button";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { usePortfolioStore } from "@/stores/portfolioStore";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { ChevronDown, Sun, Moon } from "lucide-react";
+
+import { ChevronDown, Sun, Moon, Coins } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -42,11 +43,15 @@ export function ProfileDropdown() {
             <ChevronDown className="w-6 h-6" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent className="rounded-none border-2 border-blaze-black bg-blaze-white font-mono text-lg w-56 dark:border-blaze-white dark:bg-blaze-black dark:text-blaze-white">
-          <DropdownMenuItem
-            asChild
-            className="cursor-pointer focus:bg-blaze-orange focus:text-blaze-black h-12"
-          >
+        <DropdownMenuContent className="rounded-none border-2 border-blaze-black bg-blaze-white font-mono text-lg w-56">
+          <DropdownMenuItem asChild className="cursor-pointer focus:bg-blaze-orange focus:text-blaze-black h-12 flex items-center gap-2">
+            <Link to="/create-token" className="flex items-center gap-2">
+              <Coins className="w-4 h-4" />
+              Create Token
+            </Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild className="cursor-pointer focus:bg-blaze-orange focus:text-blaze-black h-12">
+
             <Link to="/create-quest">Create Quest</Link>
           </DropdownMenuItem>
           <DropdownMenuItem

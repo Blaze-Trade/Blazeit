@@ -1,8 +1,9 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { WalletConnector } from "@/components/wallet/WalletConnector";
 import { ProfileDropdown } from "@/components/wallet/ProfileDropdown";
 import { usePortfolioStore } from "@/stores/portfolioStore";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import { Flame, BarChart2, Trophy } from "lucide-react";
 import { useEffect } from "react";
 
@@ -13,6 +14,7 @@ const navItems = [
 ];
 
 export function MainLayout() {
+
   const { isConnected, theme, setTheme } = usePortfolioStore();
 
   // Apply theme to document
@@ -46,6 +48,7 @@ export function MainLayout() {
     };
   }, []);
 
+
   return (
     <div className={cn(
       "min-h-screen flex flex-col font-mono transition-colors duration-200",
@@ -62,7 +65,18 @@ export function MainLayout() {
         <h1 className="font-display text-4xl md:text-5xl font-bold tracking-tighter">
           BLAZE IT
         </h1>
-        {isConnected ? <ProfileDropdown /> : <WalletConnector />}
+        <div className="flex items-center gap-4">
+          {/* Create Token button - only show on desktop when connected */}
+          {isConnected && (
+            <Button
+              onClick={() => navigate('/create-token')}
+              className="hidden md:flex h-12 rounded-none border-2 border-blaze-black bg-blaze-orange text-blaze-black text-lg font-bold uppercase tracking-wider hover:bg-blaze-black hover:text-blaze-white active:translate-y-px active:translate-x-px"
+            >
+              Create Token
+            </Button>
+          )}
+          {isConnected ? <ProfileDropdown /> : <WalletConnector />}
+        </div>
       </header>
 
       <main className="flex-grow pt-20 pb-24">

@@ -5,15 +5,16 @@ import { usePortfolioStore } from "@/stores/portfolioStore";
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { ChevronDown } from "lucide-react";
+
 import { toast } from "sonner";
 
+import { ChevronDown, Coins } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 export function WalletConnector() {
   const { connect, disconnect, account, wallets, connected, isLoading } = useWallet();
-  const { setConnected, setDisconnected, lastConnectedWallet } = usePortfolioStore();
-  const [hasAttemptedReconnection, setHasAttemptedReconnection] = useState(false);
+  const { setConnected, setDisconnected } = usePortfolioStore();
+  const navigate = useNavigate();
 
-  // Handle wallet connection state changes
   useEffect(() => {
     if (connected && account) {
       const currentWallet = wallets.find(w => w.name === account.publicKey?.toString());
@@ -76,7 +77,15 @@ export function WalletConnector() {
           </DropdownMenuTrigger>
           <DropdownMenuContent className="rounded-none border-2 border-blaze-black bg-blaze-white font-mono text-lg w-56">
             <DropdownMenuItem
-              onClick={handleDisconnect}
+              onClick={() => navigate("/create-token")}
+              className="cursor-pointer focus:bg-blaze-orange focus:text-blaze-black h-12 flex items-center gap-2"
+            >
+              <Coins className="w-4 h-4" />
+              Create Token
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={disconnect}
+
               className="cursor-pointer focus:bg-blaze-orange focus:text-blaze-black h-12"
             >
               Disconnect
