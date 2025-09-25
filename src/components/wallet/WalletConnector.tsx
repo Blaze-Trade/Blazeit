@@ -14,11 +14,22 @@ export function WalletConnector() {
   const { connect, disconnect, account, wallets, connected, isLoading } = useWallet();
   const { setConnected, setDisconnected } = usePortfolioStore();
   const navigate = useNavigate();
+  
+  // State for auto-reconnection
+  const [hasAttemptedReconnection, setHasAttemptedReconnection] = useState(false);
+  const [lastConnectedWallet, setLastConnectedWallet] = useState<string | null>(
+    localStorage.getItem('lastConnectedWallet')
+  );
 
   useEffect(() => {
     if (connected && account) {
       const currentWallet = wallets.find(w => w.name === account.publicKey?.toString());
       setConnected(account.address.toString(), currentWallet?.name);
+      // Store the connected wallet name
+      if (currentWallet?.name) {
+        setLastConnectedWallet(currentWallet.name);
+        localStorage.setItem('lastConnectedWallet', currentWallet.name);
+      }
     } else {
       setDisconnected();
     }
@@ -43,6 +54,8 @@ export function WalletConnector() {
   const handleDisconnect = async () => {
     try {
       await disconnect();
+      setLastConnectedWallet(null);
+      localStorage.removeItem('lastConnectedWallet');
       toast.success("Wallet disconnected successfully");
     } catch (error) {
       console.error("Failed to disconnect wallet:", error);

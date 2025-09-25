@@ -11,6 +11,8 @@ export interface Token {
   change24h: number;
   marketCap: number;
   logoUrl: string;
+  address?: string; // Optional token contract address
+  decimals?: number; // Optional token decimals
 }
 export interface Quest {
   id: string;
@@ -22,6 +24,8 @@ export interface Quest {
   status: "upcoming" | "active" | "ended";
   startTime?: string; // ISO string
   endTime?: string; // ISO string
+  creatorId?: string; // Quest creator's user ID
+  creatorWalletAddress?: string; // Quest creator's wallet address (fetched from users table)
 }
 export interface LeaderboardEntry {
   rank: number;

@@ -5,6 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { api } from "@/lib/api-client";
 import { usePortfolioStore } from "@/stores/portfolioStore";
+import { useSupabaseQuests } from "@/hooks/useSupabaseQuests";
+import { useQuestManagement } from "@/hooks/useQuestManagement";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Calculator, Calendar, Clock, Info, Wallet } from "lucide-react";
 import { useMemo } from "react";
@@ -58,7 +60,9 @@ type QuestFormValues = z.infer<typeof questSchema>;
 
 export function CreateQuestPage() {
   const navigate = useNavigate();
-  const isConnected = usePortfolioStore((state) => state.isConnected);
+  const { isConnected, address } = usePortfolioStore();
+  const { createQuest: createQuestSupabase } = useSupabaseQuests();
+  const { createQuest, isCreating } = useQuestManagement();
 
   // Set default times: start in 1 hour, end in 1 week
   const defaultStartTime = new Date(Date.now() + 60 * 60 * 1000); // 1 hour from now
@@ -129,26 +133,33 @@ export function CreateQuestPage() {
   };
 
   const onSubmit = async (values: QuestFormValues) => {
+    if (!address) {
+      toast.error("Please connect your wallet to create a quest.");
+      return;
+    }
+
     try {
       const startDate = new Date(values.startTime);
       const endDate = new Date(values.endTime);
 
-      const questData = {
+      const result = await createQuestSupabase({
         name: values.name,
+        description: `A trading quest with ${formatDuration(calculatedDuration)} duration`,
         entryFee: values.entryFee,
         prizePool: calculatedPrizePool,
-        duration: formatDuration(calculatedDuration),
-        startTime: startDate.toISOString(),
-        endTime: endDate.toISOString(),
-      };
-
-      await api("/api/quests", {
-        method: "POST",
-        body: JSON.stringify(questData),
+        durationHours: calculatedDuration,
+        startTime: startDate,
+        endTime: endDate,
+        maxParticipants: 100,
+        creatorWalletAddress: address,
       });
 
-      toast.success("Quest created successfully!");
-      navigate("/quests");
+      if (result.success) {
+        toast.success("Quest created successfully!");
+        navigate("/quests");
+      } else {
+        toast.error(result.error || "Failed to create quest. Please try again.");
+      }
     } catch (error) {
       toast.error("Failed to create quest. Please try again.");
       console.error(error);
@@ -278,10 +289,10 @@ export function CreateQuestPage() {
 
                   <Button
                     type="submit"
-                    disabled={form.formState.isSubmitting || calculatedDuration <= 0}
+                    disabled={form.formState.isSubmitting || isCreating || calculatedDuration <= 0}
                     className="w-full h-16 rounded-none border-2 border-blaze-black bg-blaze-orange text-blaze-black text-xl font-bold uppercase tracking-wider hover:bg-blaze-black hover:text-blaze-white active:translate-y-px active:translate-x-px disabled:opacity-50 disabled:cursor-not-allowed font-mono shadow-blaze-shadow"
                   >
-                    {form.formState.isSubmitting ? "Creating Quest..." : "Create Quest"}
+                    {form.formState.isSubmitting || isCreating ? "Creating Quest..." : "Create Quest"}
                   </Button>
                 </form>
               </Form>

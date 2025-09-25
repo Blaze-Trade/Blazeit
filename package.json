@@ -8,8 +8,14 @@
     "build": "vite build",
     "lint": "eslint --cache -f json --quiet .",
     "preview": "bun run build && vite preview --host 0.0.0.0 --port ${PORT:-4173}",
-    "deploy": "bun run build && wrangler deploy",
-    "cf-typegen": "wrangler types"
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:run": "vitest run",
+    "move:init": "aptos init --profile blaze-devnet",
+    "move:compile": "aptos move compile --package-dir move/BlazeIt",
+    "move:test": "aptos move test --package-dir move/BlazeIt",
+    "move:publish": "aptos move publish --package-dir move/BlazeIt --profile blaze-devnet",
+    "move:upgrade": "aptos move publish --package-dir move/BlazeIt --profile blaze-devnet --upgrade-policy compatible"
   },
   "dependencies": {
     "@aptos-labs/ts-sdk": "^5.1.0",
@@ -46,12 +52,12 @@
     "@radix-ui/react-toggle-group": "^1.1.10",
     "@radix-ui/react-tooltip": "^1.2.7",
     "@react-spring/web": "^10.0.3",
+    "@supabase/supabase-js": "^2.57.4",
     "@tanstack/react-query": "^5.83.0",
     "@telegram-apps/bridge": "^2.11.0",
     "@typescript-eslint/eslint-plugin": "^8.38.0",
     "@typescript-eslint/parser": "^8.38.0",
     "class-variance-authority": "^0.7.1",
-    "cloudflare": "^5.0.0",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "date-fns": "^4.1.0",
@@ -59,7 +65,6 @@
     "eslint-import-resolver-typescript": "^4.4.4",
     "eslint-plugin-import": "^2.32.0",
     "framer-motion": "^12.23.0",
-    "hono": "^4.8.5",
     "immer": "^10.1.1",
     "input-otp": "^1.4.2",
     "lucide-react": "^0.525.0",
@@ -88,23 +93,25 @@
     "zustand": "^5.0.6"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "^1.9.4",
-    "@cloudflare/workers-types": "^4.20250807.0",
     "@eslint/js": "^9.22.0",
     "@types/node": "^22.15.3",
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
+    "@vitest/ui": "^3.2.4",
     "aptos": "^1.21.0",
     "autoprefixer": "^10.4.21",
+    "concurrently": "^9.2.1",
     "eslint": "^9.31.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.19",
     "globals": "^16.0.0",
+    "jsdom": "^27.0.0",
     "postcss": "^8.5.3",
     "tailwindcss": "^3.4.17",
     "typescript": "5.8",
     "typescript-eslint": "^8.26.1",
-    "vite": "^6.3.1"
+    "vite": "^6.3.1",
+    "vitest": "^3.2.4"
   }
 }

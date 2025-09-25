@@ -283,7 +283,7 @@ class ErrorReporter {
   private errorQueue: ErrorReport[] = [];
   private isReporting = false;
   private readonly maxQueueSize = 10;
-  private readonly reportingEndpoint = "/api/client-errors";
+  private readonly reportingEndpoint = "/api/client-errors"; // Disabled for now
   private originalConsoleWarn: typeof console.warn | null = null;
   private originalConsoleError: typeof console.error | null = null;
   private isInitialized = false;
@@ -596,38 +596,9 @@ class ErrorReporter {
   }
 
   private async sendError(error: ErrorReport) {
-    try {
-      const response = await fetch(this.reportingEndpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(error),
-      });
-
-      if (!response.ok) {
-        throw new Error(
-          `Failed to report error: ${response.status} ${response.statusText}`
-        );
-      }
-
-      const result = (await response.json()) as {
-        success: boolean;
-        error?: string;
-      };
-
-      if (!result.success) {
-        throw new Error(result.error || "Unknown error occurred");
-      }
-
-      console.log(
-        "[ErrorReporter] Error reported successfully:",
-        error.message
-      );
-    } catch (err) {
-      console.error("[ErrorReporter] Failed to send error:", err);
-      throw err;
-    }
+    // Disabled for now - just log to console
+    console.error("[ErrorReporter] Error (reporting disabled):", error.message);
+    return;
   }
 
   // Cleanup method for proper disposal
@@ -726,15 +697,12 @@ const shouldReportImmediate = (context: ErrorContext): boolean => {
 };
 
 const sendImmediateError = async (payload: ImmediatePayload): Promise<void> => {
-  try {
-    await fetch("/api/client-errors", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-  } catch {
-    // Fail silently
-  }
+  // Disabled for now - just log to console
+  console.error(
+    "[ErrorReporter] Immediate error (reporting disabled):",
+    payload.message
+  );
+  return;
 };
 
 // Intercept console methods IMMEDIATELY before React can cache them

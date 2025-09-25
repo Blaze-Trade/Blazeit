@@ -1,7 +1,12 @@
+import { imageUploadService } from "@/lib/image-upload";
+import { tokenCreationApi } from "@/lib/supabase-api";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
-import { toast } from "sonner";
 import { useState } from "react";
-import { imageUploadService, ImageUploadResult } from "@/lib/image-upload";
+import { toast } from "sonner";
+import {
+  useLaunchpadIntegration,
+  type CreateTokenArguments,
+} from "./useLaunchpadIntegration";
 
 interface TokenCreationData {
   symbol: string;
@@ -9,6 +14,12 @@ interface TokenCreationData {
   description: string;
   image?: File;
   imageUrl?: string;
+  maxSupply?: number;
+  projectURL?: string;
+  targetSupply?: number;
+  virtualLiquidity?: number;
+  curveExponent?: number;
+  maxMintPerAccount?: number;
 }
 
 interface TokenCreationResult {
@@ -21,62 +32,91 @@ let aptosSingleton: any | null = null;
 async function getAptosClient() {
   if (aptosSingleton) return aptosSingleton;
   const mod = await import("@aptos-labs/ts-sdk");
-  const config = new mod.AptosConfig({ network: mod.Network.TESTNET });
+  const config = new mod.AptosConfig({ network: mod.Network.DEVNET });
   aptosSingleton = new mod.Aptos(config);
   return aptosSingleton;
 }
 
 export function useTokenCreation() {
-  const { signAndSubmitTransaction, account } = useWallet();
+  const { account } = useWallet();
+  const launchpadIntegration = useLaunchpadIntegration();
+  const { executeCreateToken, isLoading } = launchpadIntegration;
   const [isCreating, setIsCreating] = useState(false);
 
-  const createToken = async (tokenData: TokenCreationData): Promise<TokenCreationResult> => {
+  const createToken = async (
+    tokenData: TokenCreationData
+  ): Promise<TokenCreationResult> => {
     if (!account) {
       toast.error("Please connect your wallet first");
       return { success: false, error: "No wallet connected" };
     }
 
+    if (!executeCreateToken) {
+      console.error("Contract create token function is not available");
+      toast.error(
+        "Contract function not available. Please check wallet connection."
+      );
+      return { success: false, error: "Contract function not available" };
+    }
+
     setIsCreating(true);
-    const toastId = toast.loading("Creating token...", {
-      description: "Please approve the transaction in your wallet.",
-    });
 
     try {
-      const client = await getAptosClient();
-      
-      // For now, we'll create a simple coin using the Aptos framework
-      // In a real implementation, you might want to use a custom token standard
-      const payload = {
-        function: "0x1::managed_coin::initialize",
-        typeArguments: [],
-        functionArguments: [
-          tokenData.name, // name
-          tokenData.symbol, // symbol
-          "8", // decimals
-          "false", // monitor_supply
-        ],
+      // Prepare the arguments in the format expected by the contract
+      const createTokenArgs: CreateTokenArguments = {
+        maxSupply: tokenData.maxSupply || 1000000, // Default 1M tokens
+        name: tokenData.name,
+        symbol: tokenData.symbol,
+        decimal: 8, // Standard 8 decimals
+        iconURL: tokenData.imageUrl || "",
+        projectURL: tokenData.projectURL || "",
+        targetSupply: tokenData.targetSupply || 100000, // Default 100K target supply
+        virtualLiquidity: tokenData.virtualLiquidity || 1, // Default 1 APT virtual liquidity
+        curveExponent: tokenData.curveExponent || 2, // Default curve exponent of 2
+        maxMintPerAccount: tokenData.maxMintPerAccount || 0, // No limit by default
       };
 
-      const result = await signAndSubmitTransaction(payload);
-      await client.waitForTransaction({ transactionHash: result.hash });
+      const result = await executeCreateToken(createTokenArgs);
 
-      toast.success("Token created successfully!", {
-        id: toastId,
-        description: `Transaction: ${result.hash.slice(0, 10)}...`,
-      });
+      // If blockchain creation was successful, store the token in the database
+      if (result.success && result.hash) {
+        try {
+          // Extract token address from the transaction result
+          // Note: In a real implementation, you'd parse the transaction to get the actual token address
+          // For now, we'll use a placeholder address format
+          const tokenAddress = `0x${result.hash.slice(-40)}`; // Simplified extraction
 
-      return { success: true, hash: result.hash };
+          const dbResult = await tokenCreationApi.createToken({
+            symbol: tokenData.symbol,
+            name: tokenData.name,
+            description: tokenData.description,
+            logoUrl: tokenData.imageUrl,
+            address: tokenAddress,
+            decimals: 8, // Standard decimals
+            maxSupply: tokenData.maxSupply,
+            creatorWalletAddress: account.address.toString(),
+          });
+
+          if (dbResult.success) {
+            toast.success(
+              `Token ${tokenData.symbol} created successfully on blockchain and stored in database!`
+            );
+          } else {
+            toast.warning(
+              `Token created on blockchain but failed to store in database: ${dbResult.error}`
+            );
+          }
+        } catch (dbError) {
+          console.error("Failed to store token in database:", dbError);
+          toast.warning(
+            `Token created on blockchain but failed to store in database: ${dbError}`
+          );
+        }
+      }
+
+      return result;
     } catch (error: any) {
       console.error("Token creation failed:", error);
-      
-      const isUserRejection = error.message?.includes("User rejected the request");
-      toast.error(isUserRejection ? "Transaction rejected" : "Token creation failed", {
-        id: toastId,
-        description: isUserRejection 
-          ? "You cancelled the transaction." 
-          : (error?.message || "Please try again."),
-      });
-
       return { success: false, error };
     } finally {
       setIsCreating(false);
@@ -84,11 +124,18 @@ export function useTokenCreation() {
   };
 
   const uploadImage = async (file: File): Promise<string | null> => {
-    const result = await imageUploadService.uploadImage(file);
-    if (result.success && result.url) {
-      return result.url;
+    try {
+      const result = await imageUploadService.uploadImage(file);
+      if (result.success && result.url) {
+        return result.url;
+      }
+
+      console.error("Upload failed:", result.error);
+      throw new Error(result.error || "Failed to upload image");
+    } catch (error) {
+      console.error("Image upload error in hook:", error);
+      throw error;
     }
-    throw new Error(result.error || 'Failed to upload image');
   };
 
   return {

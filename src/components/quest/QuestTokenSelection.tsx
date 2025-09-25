@@ -4,13 +4,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { useAptos } from '@/hooks/useAptos';
-import { api } from '@/lib/api-client';
-import { usePortfolioStore } from '@/stores/portfolioStore';
-import type { Quest, Token } from '@shared/types';
-import { AlertTriangle, ArrowLeft, Check, Minus, Plus } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
+import { useSupabasePortfolio } from "@/hooks/useSupabasePortfolio";
+import { useSupabaseQuests } from "@/hooks/useSupabaseQuests";
+import { useSupabaseTokens } from "@/hooks/useSupabaseTokens";
+import { usePortfolioStore } from "@/stores/portfolioStore";
+import type { Quest, Token } from "@shared/types";
+import { AlertTriangle, ArrowLeft, Check, Minus, Plus } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 
 interface TokenSelection {
   token: Token;
@@ -23,47 +25,50 @@ interface QuestTokenSelectionProps {
   onBack: () => void;
 }
 
-export function QuestTokenSelection({ quest, onBack }: QuestTokenSelectionProps) {
+export function QuestTokenSelection({
+  quest,
+  onBack,
+}: QuestTokenSelectionProps) {
   const navigate = useNavigate();
-  const { simulateTransaction } = useAptos();
+  const { transferAPT } = useAptos();
   const { address, joinQuest } = usePortfolioStore();
+  const { joinQuest: joinQuestSupabase } = useSupabaseQuests();
+  const { buyToken: buyTokenSupabase } = useSupabasePortfolio(address);
+  const {
+    tokens,
+    loading: tokensLoading,
+    error: tokensError,
+  } = useSupabaseTokens();
 
-  const [tokens, setTokens] = useState<Token[]>([]);
   const [selectedTokens, setSelectedTokens] = useState<TokenSelection[]>([]);
-  const [loading, setLoading] = useState(true);
   const [confirming, setConfirming] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [transactionHash, setTransactionHash] = useState<string>("");
 
+  // Show error toast if tokens fail to load
   useEffect(() => {
-    const fetchTokens = async () => {
-      try {
-        const data = await api<{ items: Token[] }>('/api/tokens');
-        setTokens(data.items);
-      } catch (error) {
-        toast.error('Failed to fetch tokens');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchTokens();
-  }, []);
+    if (tokensError) {
+      toast.error("Failed to fetch tokens");
+    }
+  }, [tokensError]);
 
   const addTokenSelection = (token: Token) => {
-    if (selectedTokens.find(s => s.token.id === token.id)) {
-      toast.error('Token already selected');
+    if (selectedTokens.find((s) => s.token.id === token.id)) {
+      toast.error("Token already selected");
       return;
     }
 
     const newSelection: TokenSelection = {
       token,
       quantity: 1,
-      investmentAmount: token.price
+      investmentAmount: token.price,
     };
     setSelectedTokens([...selectedTokens, newSelection]);
   };
 
   const removeTokenSelection = (tokenId: string) => {
-    setSelectedTokens(selectedTokens.filter(s => s.token.id !== tokenId));
+    setSelectedTokens(selectedTokens.filter((s) => s.token.id !== tokenId));
   };
 
   const updateTokenQuantity = (tokenId: string, quantity: number) => {
@@ -72,11 +77,13 @@ export function QuestTokenSelection({ quest, onBack }: QuestTokenSelectionProps)
       return;
     }
 
-    setSelectedTokens(selectedTokens.map(s =>
-      s.token.id === tokenId
-        ? { ...s, quantity, investmentAmount: s.token.price * quantity }
-        : s
-    ));
+    setSelectedTokens(
+      selectedTokens.map((s) =>
+        s.token.id === tokenId
+          ? { ...s, quantity, investmentAmount: s.token.price * quantity }
+          : s
+      )
+    );
   };
 
   const updateInvestmentAmount = (tokenId: string, amount: number) => {
@@ -85,19 +92,24 @@ export function QuestTokenSelection({ quest, onBack }: QuestTokenSelectionProps)
       return;
     }
 
-    setSelectedTokens(selectedTokens.map(s =>
-      s.token.id === tokenId
-        ? { ...s, investmentAmount: amount, quantity: amount / s.token.price }
-        : s
-    ));
+    setSelectedTokens(
+      selectedTokens.map((s) =>
+        s.token.id === tokenId
+          ? { ...s, investmentAmount: amount, quantity: amount / s.token.price }
+          : s
+      )
+    );
   };
 
-  const totalInvestment = selectedTokens.reduce((sum, s) => sum + s.investmentAmount, 0);
+  const totalInvestment = selectedTokens.reduce(
+    (sum, s) => sum + s.investmentAmount,
+    0
+  );
   const totalWithFees = totalInvestment + quest.entryFee;
 
   const handleConfirmSelection = () => {
     if (selectedTokens.length === 0) {
-      toast.error('Please select at least one token');
+      toast.error("Please select at least one token");
       return;
     }
     setShowConfirmation(true);
@@ -105,44 +117,121 @@ export function QuestTokenSelection({ quest, onBack }: QuestTokenSelectionProps)
 
   const handleFinalConfirmation = async () => {
     if (!address) {
-      toast.error('Please connect your wallet');
+      toast.error("Please connect your wallet");
       return;
     }
 
     setConfirming(true);
     try {
-      // Simulate joining the quest
-      await simulateTransaction(`Joining "${quest.name}"`);
+      // Hardcoded address to send 1 APT to
+      const recipientAddress =
+        "0x9cc90ff526e7e8bdb3fc8d105b8e8abb73df9105888d46249499175c7085ef92";
 
-      // Join the quest
-      await api(`/api/quests/${quest.id}/join`, {
-        method: 'POST',
-        body: JSON.stringify({ userId: address }),
-      });
+      // Transfer 1 APT to the hardcoded address
+      const transferResult = await transferAPT(
+        recipientAddress,
+        1, // 1 APT
+        "Joining Quest - Transfer 1 APT"
+      );
 
-      // Execute all token purchases
-      for (const selection of selectedTokens) {
-        await api(`/api/quests/${quest.id}/buy`, {
-          method: 'POST',
-          body: JSON.stringify({
-            userId: address,
-            token: selection.token,
-            quantity: selection.quantity
-          }),
-        });
+      if (transferResult.success) {
+        // Store transaction hash for display
+        setTransactionHash(transferResult.hash || "");
+
+        // Add quest participation to Supabase
+        const joinResult = await joinQuestSupabase(quest.id, address);
+        if (joinResult.success) {
+          // Add to local state as well
+          joinQuest(quest);
+
+          // Show success modal
+          setShowSuccessModal(true);
+
+          // Auto-redirect after 5 seconds
+          setTimeout(() => {
+            navigate(`/quests/${quest.id}`);
+          }, 5000);
+        } else {
+          toast.error("Failed to save quest participation");
+          console.error("Failed to join quest in database:", joinResult.error);
+        }
+      } else {
+        toast.error("Transaction failed");
       }
-
-      joinQuest(quest);
-      toast.success(`Successfully joined quest and purchased ${selectedTokens.length} tokens!`);
-      navigate(`/quests/${quest.id}`);
     } catch (error) {
-      toast.error('Failed to join quest and purchase tokens');
+      console.error("Transaction error:", error);
+      toast.error("Failed to complete transaction");
     } finally {
       setConfirming(false);
     }
   };
 
-  if (loading) {
+  // Success Modal Component
+  if (showSuccessModal) {
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-none border-4 border-blaze-black shadow-blaze-shadow max-w-md w-full p-8 space-y-6">
+          {/* Success Icon */}
+          <div className="flex justify-center">
+            <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center">
+              <Check className="w-12 h-12 text-white" />
+            </div>
+          </div>
+
+          {/* Success Message */}
+          <div className="text-center space-y-3">
+            <h2 className="font-display text-3xl font-bold text-blaze-black">
+              Transaction Successful!
+            </h2>
+            <p className="text-lg text-blaze-black/80">
+              You have successfully joined <strong>{quest.name}</strong>
+            </p>
+          </div>
+
+          {/* Transaction Details */}
+          <div className="bg-blaze-black/5 p-4 space-y-2">
+            <div className="flex justify-between">
+              <span className="text-sm text-blaze-black/70">Amount Sent:</span>
+              <span className="font-mono font-bold">1 APT</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-sm text-blaze-black/70">
+                Tokens Selected:
+              </span>
+              <span className="font-mono font-bold">
+                {selectedTokens.length}
+              </span>
+            </div>
+            {transactionHash && (
+              <div className="pt-2 border-t border-blaze-black/10">
+                <span className="text-xs text-blaze-black/50">
+                  Transaction Hash:
+                </span>
+                <p className="font-mono text-xs break-all">
+                  {transactionHash.slice(0, 20)}...
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Buttons */}
+          <div className="space-y-3">
+            <Button
+              onClick={() => navigate(`/quests/${quest.id}`)}
+              className="w-full h-12 rounded-none border-2 border-blaze-black bg-blaze-orange text-blaze-black font-bold uppercase hover:bg-blaze-black hover:text-blaze-white"
+            >
+              Go to Quest Dashboard
+            </Button>
+            <p className="text-center text-sm text-blaze-black/50">
+              Redirecting automatically in 5 seconds...
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (tokensLoading) {
     return (
       <div className="p-4 md:p-8">
         <div className="max-w-7xl mx-auto">
@@ -169,27 +258,41 @@ export function QuestTokenSelection({ quest, onBack }: QuestTokenSelectionProps)
 
           <Card className="rounded-none border-2 border-blaze-black shadow-blaze-shadow">
             <CardHeader className="border-b-2 border-blaze-black">
-              <CardTitle className="font-display text-4xl font-bold">Confirm Quest Entry</CardTitle>
+              <CardTitle className="font-display text-4xl font-bold">
+                Confirm Quest Entry
+              </CardTitle>
             </CardHeader>
             <CardContent className="p-8 space-y-6">
               {/* Quest Details */}
               <div className="space-y-4">
-                <h3 className="font-display text-2xl font-bold">Quest: {quest.name}</h3>
+                <h3 className="font-display text-2xl font-bold">
+                  Quest: {quest.name}
+                </h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="border-2 border-blaze-black p-4">
-                    <p className="text-sm uppercase tracking-wider text-blaze-black/70">Entry Fee</p>
+                    <p className="text-sm uppercase tracking-wider text-blaze-black/70">
+                      Entry Fee
+                    </p>
                     <p className="text-2xl font-bold">${quest.entryFee}</p>
                   </div>
                   <div className="border-2 border-blaze-black p-4">
-                    <p className="text-sm uppercase tracking-wider text-blaze-black/70">Prize Pool</p>
-                    <p className="text-2xl font-bold">${quest.prizePool.toLocaleString()}</p>
+                    <p className="text-sm uppercase tracking-wider text-blaze-black/70">
+                      Prize Pool
+                    </p>
+                    <p className="text-2xl font-bold">
+                      ${quest.prizePool.toLocaleString()}
+                    </p>
                   </div>
                   <div className="border-2 border-blaze-black p-4">
-                    <p className="text-sm uppercase tracking-wider text-blaze-black/70">Duration</p>
+                    <p className="text-sm uppercase tracking-wider text-blaze-black/70">
+                      Duration
+                    </p>
                     <p className="text-2xl font-bold">{quest.duration}</p>
                   </div>
                   <div className="border-2 border-blaze-black p-4">
-                    <p className="text-sm uppercase tracking-wider text-blaze-black/70">Players</p>
+                    <p className="text-sm uppercase tracking-wider text-blaze-black/70">
+                      Players
+                    </p>
                     <p className="text-2xl font-bold">{quest.participants}</p>
                   </div>
                 </div>
@@ -199,20 +302,37 @@ export function QuestTokenSelection({ quest, onBack }: QuestTokenSelectionProps)
 
               {/* Selected Tokens */}
               <div className="space-y-4">
-                <h3 className="font-display text-2xl font-bold">Selected Tokens ({selectedTokens.length})</h3>
+                <h3 className="font-display text-2xl font-bold">
+                  Selected Tokens ({selectedTokens.length})
+                </h3>
                 <div className="space-y-3">
                   {selectedTokens.map((selection) => (
-                    <div key={selection.token.id} className="flex items-center justify-between p-4 border-2 border-blaze-black">
+                    <div
+                      key={selection.token.id}
+                      className="flex items-center justify-between p-4 border-2 border-blaze-black"
+                    >
                       <div className="flex items-center gap-4">
-                        <img src={selection.token.logoUrl} alt={selection.token.name} className="w-12 h-12" />
+                        <img
+                          src={selection.token.logoUrl}
+                          alt={selection.token.name}
+                          className="w-12 h-12"
+                        />
                         <div>
-                          <p className="font-bold text-lg">{selection.token.symbol}</p>
-                          <p className="text-sm text-blaze-black/70">{selection.token.name}</p>
+                          <p className="font-bold text-lg">
+                            {selection.token.symbol}
+                          </p>
+                          <p className="text-sm text-blaze-black/70">
+                            {selection.token.name}
+                          </p>
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="font-bold text-lg">{selection.quantity.toFixed(4)} tokens</p>
-                        <p className="text-sm text-blaze-black/70">${selection.investmentAmount.toFixed(2)}</p>
+                        <p className="font-bold text-lg">
+                          {selection.quantity.toFixed(4)} tokens
+                        </p>
+                        <p className="text-sm text-blaze-black/70">
+                          ${selection.investmentAmount.toFixed(2)}
+                        </p>
                       </div>
                     </div>
                   ))}
@@ -223,7 +343,9 @@ export function QuestTokenSelection({ quest, onBack }: QuestTokenSelectionProps)
 
               {/* Cost Breakdown */}
               <div className="space-y-4">
-                <h3 className="font-display text-2xl font-bold">Cost Breakdown</h3>
+                <h3 className="font-display text-2xl font-bold">
+                  Cost Breakdown
+                </h3>
                 <div className="space-y-2 font-mono">
                   <div className="flex justify-between text-lg">
                     <span>Token Investment:</span>
@@ -247,8 +369,9 @@ export function QuestTokenSelection({ quest, onBack }: QuestTokenSelectionProps)
                 <div className="text-sm">
                   <p className="font-bold text-yellow-800">Important:</p>
                   <p className="text-yellow-700">
-                    This will join the quest and immediately purchase the selected tokens.
-                    Make sure you have sufficient funds in your wallet.
+                    This will join the quest and immediately purchase the
+                    selected tokens. Make sure you have sufficient funds in your
+                    wallet.
                   </p>
                 </div>
               </div>
@@ -267,7 +390,7 @@ export function QuestTokenSelection({ quest, onBack }: QuestTokenSelectionProps)
                   disabled={confirming}
                   className="flex-1 h-14 rounded-none border-2 border-blaze-black bg-blaze-orange text-blaze-black text-xl font-bold uppercase hover:bg-blaze-black hover:text-blaze-white"
                 >
-                  {confirming ? 'Processing...' : 'Confirm & Join Quest'}
+                  {confirming ? "Processing..." : "Confirm & Join Quest"}
                 </Button>
               </div>
             </CardContent>
@@ -293,30 +416,44 @@ export function QuestTokenSelection({ quest, onBack }: QuestTokenSelectionProps)
           <div className="lg:col-span-2 space-y-6">
             <Card className="rounded-none border-2 border-blaze-black shadow-blaze-shadow">
               <CardHeader className="border-b-2 border-blaze-black">
-                <CardTitle className="font-display text-3xl font-bold">Select Tokens</CardTitle>
+                <CardTitle className="font-display text-3xl font-bold">
+                  Select Tokens
+                </CardTitle>
               </CardHeader>
               <CardContent className="p-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {tokens.map((token) => {
-                    const isSelected = selectedTokens.some(s => s.token.id === token.id);
+                    const isSelected = selectedTokens.some(
+                      (s) => s.token.id === token.id
+                    );
                     return (
                       <div
                         key={token.id}
                         className={`p-4 border-2 cursor-pointer transition-colors ${
                           isSelected
-                            ? 'border-blaze-orange bg-blaze-orange/10'
-                            : 'border-blaze-black hover:bg-blaze-black/5'
+                            ? "border-blaze-orange bg-blaze-orange/10"
+                            : "border-blaze-black hover:bg-blaze-black/5"
                         }`}
                         onClick={() => !isSelected && addTokenSelection(token)}
                       >
                         <div className="flex items-center gap-3">
-                          <img src={token.logoUrl} alt={token.name} className="w-10 h-10" />
+                          <img
+                            src={token.logoUrl}
+                            alt={token.name}
+                            className="w-10 h-10"
+                          />
                           <div className="flex-1">
                             <p className="font-bold text-lg">{token.symbol}</p>
-                            <p className="text-sm text-blaze-black/70">{token.name}</p>
-                            <p className="font-mono font-bold">${token.price.toFixed(2)}</p>
+                            <p className="text-sm text-blaze-black/70">
+                              {token.name}
+                            </p>
+                            <p className="font-mono font-bold">
+                              ${token.price.toFixed(2)}
+                            </p>
                           </div>
-                          {isSelected && <Check className="w-6 h-6 text-blaze-orange" />}
+                          {isSelected && (
+                            <Check className="w-6 h-6 text-blaze-orange" />
+                          )}
                         </div>
                       </div>
                     );
@@ -342,16 +479,27 @@ export function QuestTokenSelection({ quest, onBack }: QuestTokenSelectionProps)
                 ) : (
                   <>
                     {selectedTokens.map((selection) => (
-                      <div key={selection.token.id} className="space-y-3 p-4 border border-blaze-black/20">
+                      <div
+                        key={selection.token.id}
+                        className="space-y-3 p-4 border border-blaze-black/20"
+                      >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <img src={selection.token.logoUrl} alt={selection.token.name} className="w-8 h-8" />
-                            <span className="font-bold">{selection.token.symbol}</span>
+                            <img
+                              src={selection.token.logoUrl}
+                              alt={selection.token.name}
+                              className="w-8 h-8"
+                            />
+                            <span className="font-bold">
+                              {selection.token.symbol}
+                            </span>
                           </div>
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => removeTokenSelection(selection.token.id)}
+                            onClick={() =>
+                              removeTokenSelection(selection.token.id)
+                            }
                             className="text-red-600 hover:bg-red-50"
                           >
                             Remove
@@ -364,7 +512,12 @@ export function QuestTokenSelection({ quest, onBack }: QuestTokenSelectionProps)
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => updateTokenQuantity(selection.token.id, selection.quantity - 0.1)}
+                              onClick={() =>
+                                updateTokenQuantity(
+                                  selection.token.id,
+                                  selection.quantity - 0.1
+                                )
+                              }
                               className="h-8 w-8 p-0 rounded-none border-blaze-black"
                             >
                               <Minus className="w-4 h-4" />
@@ -372,7 +525,12 @@ export function QuestTokenSelection({ quest, onBack }: QuestTokenSelectionProps)
                             <Input
                               type="number"
                               value={selection.quantity.toFixed(4)}
-                              onChange={(e) => updateTokenQuantity(selection.token.id, parseFloat(e.target.value) || 0)}
+                              onChange={(e) =>
+                                updateTokenQuantity(
+                                  selection.token.id,
+                                  parseFloat(e.target.value) || 0
+                                )
+                              }
                               className="text-center h-8 rounded-none border-blaze-black"
                               step="0.0001"
                               min="0"
@@ -380,7 +538,12 @@ export function QuestTokenSelection({ quest, onBack }: QuestTokenSelectionProps)
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => updateTokenQuantity(selection.token.id, selection.quantity + 0.1)}
+                              onClick={() =>
+                                updateTokenQuantity(
+                                  selection.token.id,
+                                  selection.quantity + 0.1
+                                )
+                              }
                               className="h-8 w-8 p-0 rounded-none border-blaze-black"
                             >
                               <Plus className="w-4 h-4" />
@@ -389,11 +552,18 @@ export function QuestTokenSelection({ quest, onBack }: QuestTokenSelectionProps)
                         </div>
 
                         <div className="space-y-2">
-                          <Label className="text-sm font-bold">Investment ($)</Label>
+                          <Label className="text-sm font-bold">
+                            Investment ($)
+                          </Label>
                           <Input
                             type="number"
                             value={selection.investmentAmount.toFixed(2)}
-                            onChange={(e) => updateInvestmentAmount(selection.token.id, parseFloat(e.target.value) || 0)}
+                            onChange={(e) =>
+                              updateInvestmentAmount(
+                                selection.token.id,
+                                parseFloat(e.target.value) || 0
+                              )
+                            }
                             className="h-8 rounded-none border-blaze-black"
                             step="0.01"
                             min="0"
