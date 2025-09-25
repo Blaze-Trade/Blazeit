@@ -12,7 +12,17 @@ export class TokenEntity extends IndexedEntity<Token> {
 export class QuestEntity extends IndexedEntity<Quest> {
   static readonly entityName = "quest";
   static readonly indexName = "quests";
-  static readonly initialState: Quest = { id: "", name: "", entryFee: 0, prizePool: 0, duration: "", participants: 0, status: "upcoming" };
+  static readonly initialState: Quest = {
+    id: "",
+    name: "",
+    entryFee: 0,
+    prizePool: 0,
+    duration: "",
+    participants: 0,
+    status: "upcoming",
+    startTime: undefined,
+    endTime: undefined
+  };
   static seedData = MOCK_QUESTS;
 }
 // QUEST PORTFOLIO ENTITY: Stores a user's holdings for a single quest.
@@ -20,7 +30,8 @@ export class QuestPortfolioEntity extends IndexedEntity<QuestPortfolio> {
     static readonly entityName = "questportfolio";
     static readonly indexName = "questportfolios";
     static readonly initialState: QuestPortfolio = { id: "", questId: "", userId: "", joinedAt: 0, holdings: [] };
-    static keyOf(state: QuestPortfolio): string {
+    
+    static keyOf<U extends { id: string }>(state: U): string {
         return state.id;
     }
     async buyToken(token: Token, quantity: number): Promise<QuestPortfolio> {
@@ -58,4 +69,49 @@ export class QuestPortfolioEntity extends IndexedEntity<QuestPortfolio> {
             return portfolio;
         });
     }
+}
+
+// WATCHLIST ENTITY: Stores a user's watchlisted tokens.
+export class WatchlistEntity extends IndexedEntity<{
+  id: string;
+  userId: string;
+  tokenIds: string[];
+  createdAt: number;
+  updatedAt: number;
+}> {
+  static readonly entityName = "watchlist";
+  static readonly indexName = "watchlists";
+  static readonly initialState = {
+    id: "",
+    userId: "",
+    tokenIds: [],
+    createdAt: 0,
+    updatedAt: 0
+  };
+
+  async addToken(tokenId: string): Promise<void> {
+    await this.mutate(watchlist => {
+      if (!watchlist.tokenIds.includes(tokenId)) {
+        watchlist.tokenIds.push(tokenId);
+        watchlist.updatedAt = Date.now();
+      }
+      return watchlist;
+    });
+  }
+
+  async removeToken(tokenId: string): Promise<void> {
+    await this.mutate(watchlist => {
+      watchlist.tokenIds = watchlist.tokenIds.filter(id => id !== tokenId);
+      watchlist.updatedAt = Date.now();
+      return watchlist;
+    });
+  }
+
+  async clearAll(): Promise<void> {
+    await this.mutate(watchlist => {
+      watchlist.tokenIds = [];
+      watchlist.updatedAt = Date.now();
+      return watchlist;
+    });
+  }
 }

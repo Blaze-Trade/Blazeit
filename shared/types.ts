@@ -20,6 +20,8 @@ export interface Quest {
   duration: string;
   participants: number;
   status: "upcoming" | "active" | "ended";
+  startTime?: string; // ISO string
+  endTime?: string; // ISO string
 }
 export interface LeaderboardEntry {
   rank: number;
