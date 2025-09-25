@@ -24,6 +24,7 @@ const LAUNCHPAD_ADDRESS = '0x9239ac2bb7bb998c6d19d1b309dd2093f130185710415832caf
 
 export function useLaunchpadIntegration() {
   const { signAndSubmitTransaction, account } = useWallet();
+  
   const [isLoading, setIsLoading] = useState(false);
 
   // Generic transaction handler
@@ -35,6 +36,11 @@ export function useLaunchpadIntegration() {
     if (!account) {
       toast.error('Please connect your wallet first');
       return { success: false, error: 'No wallet connected' };
+    }
+
+    if (!signAndSubmitTransaction) {
+      toast.error('Wallet not properly connected');
+      return { success: false, error: 'signAndSubmitTransaction not available' };
     }
 
     setIsLoading(true);

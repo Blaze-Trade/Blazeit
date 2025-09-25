@@ -45,20 +45,6 @@ export function TokenCreationPage() {
 
   const quality = calculateQuality();
 
-  // Debug button state
-  console.log('Button disabled state:', {
-    connected,
-    account: account?.address,
-    isCreating,
-    quality,
-    disabled: !connected || isCreating || quality < 100
-  });
-  
-  console.log('Wallet state:', {
-    connected,
-    account: account?.address,
-    isConnected: isConnected
-  });
 
   // Creation fee in APT (example value)
   const creationFee = 0.0000000000000001;
@@ -312,14 +298,9 @@ export function TokenCreationPage() {
             </Button>
 
             {!connected && (
-              <div className="text-center text-blaze-black/70 font-mono space-y-2">
-                <p>Please connect your wallet to create a token</p>
-                <div className="text-sm">
-                  <p>Debug: connected={connected ? 'true' : 'false'}</p>
-                  <p>account={account ? 'present' : 'null'}</p>
-                  <p>quality={quality}%</p>
-                </div>
-              </div>
+              <p className="text-center text-blaze-black/70 font-mono">
+                Please connect your wallet to create a token
+              </p>
             )}
           </CardContent>
         </Card>
