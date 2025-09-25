@@ -66,7 +66,22 @@ export function TradePage() {
         toast.success(`Bought 1 ${token.symbol}`);
       }
     } else if (direction === 'up') {
+      // Add to local store
       addToWatchlist(token);
+
+      // Also add to backend if connected
+      if (address) {
+        try {
+          await api(`/api/watchlist/${address}/add`, {
+            method: 'POST',
+            body: JSON.stringify({ tokenId: token.id }),
+          });
+        } catch (error) {
+          console.error('Failed to sync watchlist to backend:', error);
+          // Don't show error to user as local storage still works
+        }
+      }
+
       toast.info(`${token.symbol} added to watchlist`);
     }
   };
