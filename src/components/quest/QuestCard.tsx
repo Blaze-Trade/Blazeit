@@ -18,10 +18,8 @@ export function QuestCard({ quest }: QuestCardProps) {
   const navigate = useNavigate();
 
   const handleJoinQuest = async () => {
-    if (isJoined || !isConnected || !address) {
-      if (!isConnected) {
-        toast.error("Please connect your wallet to join a quest");
-      }
+    if (!isConnected || !address) {
+      toast.error("Please connect your wallet to join a quest");
       return;
     }
 
@@ -34,56 +32,12 @@ export function QuestCard({ quest }: QuestCardProps) {
       return "Build Portfolio";
     }
 
-    // Check if quest has ended
-    if (quest.endTime) {
-      const now = new Date();
-      const endTime = new Date(quest.endTime);
-      if (now >= endTime) {
-        return "Quest Ended";
-      }
-    }
-
-    // Check if quest has started based on start time
-    if (quest.startTime) {
-      const now = new Date();
-      const startTime = new Date(quest.startTime);
-
-      if (now < startTime) {
-        return `Join Quest (${quest.entryFee} APT)`;
-      } else {
-        return `Join Quest (${quest.entryFee} APT)`;
-      }
-    }
-
-    // Fallback to status-based logic
-    if (quest.status === "active") {
-      return `Join Quest (${quest.entryFee} APT)`;
-    }
-    if (quest.status === "upcoming") {
-      return `Join Quest (${quest.entryFee} APT)`;
-    }
-    return "Quest Ended";
+    return `Join Quest (${quest.entryFee} APT)`;
   };
 
   const canJoinQuest = () => {
-    if (isJoined || !isConnected) return false;
-
-    // Check if quest has not ended yet (current time is before end time)
-    if (quest.endTime) {
-      const now = new Date();
-      const endTime = new Date(quest.endTime);
-      if (now >= endTime) return false; // Quest has ended
-    }
-
-    // Allow joining if quest hasn't started yet OR if it's active
-    if (quest.startTime) {
-      const now = new Date();
-      const startTime = new Date(quest.startTime);
-      return now < startTime; // Allow joining before start time
-    }
-
-    // Fallback to status check if no start time
-    return quest.status === "active";
+    // Always allow joining if wallet is connected
+    return isConnected;
   };
 
   const getTimeUntilStart = () => {
@@ -210,8 +164,7 @@ export function QuestCard({ quest }: QuestCardProps) {
       )}
       <Button
         onClick={handleJoinQuest}
-        className="w-full h-14 rounded-none border-2 border-blaze-black bg-blaze-black text-blaze-white text-xl font-bold uppercase tracking-wider hover:bg-blaze-orange hover:text-blaze-black active:translate-y-px active:translate-x-px disabled:bg-blaze-black/50 disabled:border-blaze-black/50 disabled:text-blaze-white/50"
-        disabled={!canJoinQuest()}
+        className="w-full h-14 rounded-none border-2 border-blaze-black bg-blaze-black text-blaze-white text-xl font-bold uppercase tracking-wider hover:bg-blaze-orange hover:text-blaze-black active:translate-y-px active:translate-x-px"
       >
         {getButtonText()}
       </Button>

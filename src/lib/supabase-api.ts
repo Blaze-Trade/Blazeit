@@ -313,22 +313,26 @@ export const questApi = {
       // Get quest details
       const questResponse = await this.getQuest(questId);
       if (!questResponse.success || !questResponse.data) {
-        return { success: false, error: 'Quest not found' };
+        return { success: false, error: "Quest not found" };
       }
 
       const quest = questResponse.data;
 
       // Check if user already joined
-      const { data: existingParticipant, error: participantCheckError } = await supabase
-        .from('quest_participants')
-        .select('*')
-        .eq('quest_id', questId)
-        .eq('user_id', user.id)
-        .maybeSingle();
+      const { data: existingParticipant, error: participantCheckError } =
+        await supabase
+          .from("quest_participants")
+          .select("*")
+          .eq("quest_id", questId)
+          .eq("user_id", user.id)
+          .maybeSingle();
 
       if (existingParticipant) {
         // Return existing portfolio
-        const portfolioResponse = await this.getQuestPortfolio(questId, walletAddress);
+        const portfolioResponse = await this.getQuestPortfolio(
+          questId,
+          walletAddress
+        );
         return portfolioResponse;
       }
 
@@ -337,17 +341,17 @@ export const questApi = {
       const startTime = new Date(quest.startTime!);
       const endTime = new Date(quest.endTime!);
 
-      if (now >= startTime) {
-        return { success: false, error: 'Cannot join quest after it has started' };
-      }
+      // if (now >= startTime) {
+      //   return { success: false, error: 'Cannot join quest after it has started' };
+      // }
 
-      if (now >= endTime) {
-        return { success: false, error: 'Cannot join quest after it has ended' };
-      }
+      // if (now >= endTime) {
+      //   return { success: false, error: 'Cannot join quest after it has ended' };
+      // }
 
       // Start transaction
       const { error: participantError } = await supabase
-        .from('quest_participants')
+        .from("quest_participants")
         .insert({
           quest_id: questId,
           user_id: user.id,
@@ -360,12 +364,12 @@ export const questApi = {
 
       // Update user balance
       const { error: balanceError } = await supabase
-        .from('users')
+        .from("users")
         .update({
           balance: (user.balance - quest.entryFee).toString(),
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         })
-        .eq('id', user.id);
+        .eq("id", user.id);
 
       if (balanceError) {
         return { success: false, error: balanceError.message };
@@ -373,27 +377,25 @@ export const questApi = {
 
       // Update quest participant count
       const { error: questError } = await supabase
-        .from('quests')
+        .from("quests")
         .update({
           current_participants: quest.participants + 1,
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         })
-        .eq('id', questId);
+        .eq("id", questId);
 
       if (questError) {
         return { success: false, error: questError.message };
       }
 
       // Create transaction record
-      await supabase
-        .from('transactions')
-        .insert({
-          user_id: user.id,
-          quest_id: questId,
-          type: 'quest_entry',
-          amount: quest.entryFee.toString(),
-          status: 'completed',
-        });
+      await supabase.from("transactions").insert({
+        user_id: user.id,
+        quest_id: questId,
+        type: "quest_entry",
+        amount: quest.entryFee.toString(),
+        status: "completed",
+      });
 
       // Return new portfolio
       const portfolio: QuestPortfolio = {

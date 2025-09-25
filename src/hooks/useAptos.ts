@@ -33,13 +33,20 @@ export function useAptos() {
 
       // Simple transaction payload that will definitely work
       const transactionPayload = {
-        function: "0x1::aptos_account::transfer",
-        typeArguments: [],
-        functionArguments: [recipientAddress, amount * 100000000], // Convert to octas
+        data: {
+          function: "0x1::aptos_account::transfer",
+          typeArguments: [],
+          functionArguments: [recipientAddress, amount * 100000000], // Convert to octas
+        },
       };
 
       // Sign and submit the transaction
+      console.log(
+        "Calling signAndSubmitTransaction with payload:",
+        transactionPayload
+      );
       const result = await signAndSubmitTransaction(transactionPayload);
+      console.log("Transaction result:", result);
 
       if (!result || !result.hash) {
         throw new Error("Transaction submission failed");
@@ -54,16 +61,20 @@ export function useAptos() {
     } catch (error: any) {
       let errorMessage = "Unknown error";
 
-      if (error && typeof error === "object") {
-        if (error.message) {
-          errorMessage = error.message;
-        } else if (error.toString) {
-          errorMessage = error.toString();
-        } else {
-          errorMessage = "Unknown error";
+      try {
+        if (error && typeof error === "object") {
+          if (error.message) {
+            errorMessage = error.message;
+          } else if (error.toString && typeof error.toString === "function") {
+            errorMessage = error.toString();
+          } else {
+            errorMessage = "Unknown error";
+          }
+        } else if (error) {
+          errorMessage = String(error);
         }
-      } else if (error) {
-        errorMessage = String(error);
+      } catch (parseError) {
+        errorMessage = "Error parsing error message";
       }
 
       const isUserRejection =

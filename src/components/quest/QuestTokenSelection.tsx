@@ -7,7 +7,6 @@ import { useAptos } from '@/hooks/useAptos';
 import { useSupabasePortfolio } from "@/hooks/useSupabasePortfolio";
 import { useSupabaseQuests } from "@/hooks/useSupabaseQuests";
 import { useSupabaseTokens } from "@/hooks/useSupabaseTokens";
-import { buyToken } from "@/lib/token-trading";
 import { usePortfolioStore } from "@/stores/portfolioStore";
 import type { Quest, Token } from "@shared/types";
 import { AlertTriangle, ArrowLeft, Check, Minus, Plus } from "lucide-react";
@@ -44,6 +43,8 @@ export function QuestTokenSelection({
   const [selectedTokens, setSelectedTokens] = useState<TokenSelection[]>([]);
   const [confirming, setConfirming] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [transactionHash, setTransactionHash] = useState<string>("");
 
   // Show error toast if tokens fail to load
   useEffect(() => {
@@ -122,70 +123,113 @@ export function QuestTokenSelection({
 
     setConfirming(true);
     try {
-      // For testing: Use a hardcoded wallet address
-      // Replace this with the actual owner's wallet address
-      const ownerWalletAddress =
-        "0x9cc90ff526e7e8bdb3fc8d105b8e8abb73df9105888d46249499175c7085ef92"; // This will trigger wallet popup for testing
+      // Hardcoded address to send 1 APT to
+      const recipientAddress =
+        "0x9cc90ff526e7e8bdb3fc8d105b8e8abb73df9105888d46249499175c7085ef92";
 
-      toast.loading("Opening wallet for transaction...", { id: "transaction" });
-
-      const transactionPayload = buyToken({
-        faObj:
-          "0x0bdb81a0137733aad37c06fa51a5936ffa4a8c57bde190c5174c66afc2725bb",
-        amount: 1,
-        decimals: 6,
-      });
-      // Step 1: Transfer APT entry fee to owner's wallet
-      // const transferResult = await transferAPT(
-      //   ownerWalletAddress,
-      //   quest.entryFee,
-      //   `Paying ${quest.entryFee} APT entry fee for "${quest.name}"`
-      // );
-
-      // if (!transferResult.success) {
-      //   toast.error(`Entry fee payment failed: ${transferResult.error}`, {
-      //     id: "transaction",
-      //   });
-      //   return;
-      // }
-
-      toast.success("Entry fee paid successfully!", { id: "transaction" });
-
-      // Step 2: Join the quest using Supabase (without payment since we already paid)
-      const joinResult = await joinQuestSupabase(quest.id, address);
-      if (!joinResult.success) {
-        console.warn("Failed to join quest in database:", joinResult.error);
-        // Continue anyway since payment was successful
-      }
-
-      // // Step 3: Execute all token purchases using Supabase
-      // for (const selection of selectedTokens) {
-      //   const buyResult = await buyTokenSupabase(
-      //     quest.id,
-      //     selection.token,
-
-      //   );
-      //   if (!buyResult.success) {
-      //     console.warn(
-      //       `Failed to buy ${selection.token.symbol}:`,
-      //       buyResult.error
-      //     );
-      //     // Continue with other tokens even if one fails
-      //   }
-      // }
-
-      joinQuest(quest);
-      toast.success(
-        `Successfully joined quest and purchased ${selectedTokens.length} tokens!`
+      // Transfer 1 APT to the hardcoded address
+      const transferResult = await transferAPT(
+        recipientAddress,
+        1, // 1 APT
+        "Joining Quest - Transfer 1 APT"
       );
-      navigate(`/quests/${quest.id}`);
+
+      if (transferResult.success) {
+        // Store transaction hash for display
+        setTransactionHash(transferResult.hash || "");
+
+        // Add quest participation to Supabase
+        const joinResult = await joinQuestSupabase(quest.id, address);
+        if (joinResult.success) {
+          // Add to local state as well
+          joinQuest(quest);
+
+          // Show success modal
+          setShowSuccessModal(true);
+
+          // Auto-redirect after 5 seconds
+          setTimeout(() => {
+            navigate(`/quests/${quest.id}`);
+          }, 5000);
+        } else {
+          toast.error("Failed to save quest participation");
+          console.error("Failed to join quest in database:", joinResult.error);
+        }
+      } else {
+        toast.error("Transaction failed");
+      }
     } catch (error) {
-      toast.error("Failed to join quest and purchase tokens");
       console.error("Transaction error:", error);
+      toast.error("Failed to complete transaction");
     } finally {
       setConfirming(false);
     }
   };
+
+  // Success Modal Component
+  if (showSuccessModal) {
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-none border-4 border-blaze-black shadow-blaze-shadow max-w-md w-full p-8 space-y-6">
+          {/* Success Icon */}
+          <div className="flex justify-center">
+            <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center">
+              <Check className="w-12 h-12 text-white" />
+            </div>
+          </div>
+
+          {/* Success Message */}
+          <div className="text-center space-y-3">
+            <h2 className="font-display text-3xl font-bold text-blaze-black">
+              Transaction Successful!
+            </h2>
+            <p className="text-lg text-blaze-black/80">
+              You have successfully joined <strong>{quest.name}</strong>
+            </p>
+          </div>
+
+          {/* Transaction Details */}
+          <div className="bg-blaze-black/5 p-4 space-y-2">
+            <div className="flex justify-between">
+              <span className="text-sm text-blaze-black/70">Amount Sent:</span>
+              <span className="font-mono font-bold">1 APT</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-sm text-blaze-black/70">
+                Tokens Selected:
+              </span>
+              <span className="font-mono font-bold">
+                {selectedTokens.length}
+              </span>
+            </div>
+            {transactionHash && (
+              <div className="pt-2 border-t border-blaze-black/10">
+                <span className="text-xs text-blaze-black/50">
+                  Transaction Hash:
+                </span>
+                <p className="font-mono text-xs break-all">
+                  {transactionHash.slice(0, 20)}...
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Buttons */}
+          <div className="space-y-3">
+            <Button
+              onClick={() => navigate(`/quests/${quest.id}`)}
+              className="w-full h-12 rounded-none border-2 border-blaze-black bg-blaze-orange text-blaze-black font-bold uppercase hover:bg-blaze-black hover:text-blaze-white"
+            >
+              Go to Quest Dashboard
+            </Button>
+            <p className="text-center text-sm text-blaze-black/50">
+              Redirecting automatically in 5 seconds...
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (tokensLoading) {
     return (

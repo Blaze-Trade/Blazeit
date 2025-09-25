@@ -3,17 +3,13 @@ import { Button } from "@/components/ui/button";
 import { Toaster, toast } from "@/components/ui/sonner";
 import { useAptos } from "@/hooks/useAptos";
 import { useBlockchainTokens } from "@/hooks/useBlockchainTokens";
-import { useContractInteractions } from "@/hooks/useContractInteractions";
 import { useSupabasePortfolio } from "@/hooks/useSupabasePortfolio";
 import { useSupabaseTokens } from "@/hooks/useSupabaseTokens";
 import { useSupabaseWatchlist } from "@/hooks/useSupabaseWatchlist";
 import { api } from "@/lib/api-client";
-import {
-  buyToken,
-  getTokenAddress,
-  getTokenDecimals,
-} from "@/lib/token-trading";
+import { CONTRACT_FUNCTIONS, createTransactionPayload } from "@/lib/contracts";
 import { usePortfolioStore } from "@/stores/portfolioStore";
+import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { MOCK_TOKENS } from "@shared/mock-data";
 import type { Token } from "@shared/types";
 import { ArrowUp, Heart, Loader2, Swords, Wallet, X } from "lucide-react";
@@ -34,6 +30,9 @@ export function TradePage() {
     exitQuestMode,
   } = usePortfolioStore();
 
+  // Get signAndSubmitTransaction from wallet
+  const { signAndSubmitTransaction } = useWallet();
+
   // Use blockchain tokens as primary source, Supabase as fallback
   const {
     tokens: blockchainTokens,
@@ -49,8 +48,6 @@ export function TradePage() {
   const { addToWatchlist: addToWatchlistSupabase } =
     useSupabaseWatchlist(address);
   const { simulateTransaction } = useAptos();
-  const { buyToken: buyTokenContract, isLoading: isContractLoading } =
-    useContractInteractions();
   const isInQuestMode = activeQuest !== null;
 
   // Update tokens when either source is loaded
@@ -114,36 +111,57 @@ export function TradePage() {
           restoreCard(token.id);
         }
       } else {
-        // Real token purchase for regular trading
+        // Real token purchase using CONTRACT_FUNCTIONS.launchpad.buyToken
         try {
-          const tokenAddress = getTokenAddress(token);
-          const tokenDecimals = getTokenDecimals(token);
+          // Create transaction payload for buying token
+          const payload = {
+            data: createTransactionPayload(
+              CONTRACT_FUNCTIONS.launchpad.buyToken,
+              [], // No type arguments
+              [
+                "0x0bdb81a0137733aad37c06fa51a5936ffa4a8c57bde190c5174c66afc2725bb6",
+                1000000,
+              ]
+            ),
+          };
 
-          const transactionPayload = buyToken({
-            faObj: tokenAddress,
-            amount: 1,
-            decimals: tokenDecimals,
+          const toastId = toast.loading(`Buying ${token.symbol}...`, {
+            description: "Please approve the transaction in your wallet.",
           });
 
-          const result = await buyTokenContract({
-            questId: "regular-trading", // Use a default quest ID for regular trading
-            tokenAddress,
-            symbol: token.symbol,
-            quantity: 1,
-            cost: token.price, // Use token price as cost
-          });
+          // Submit transaction to blockchain
+          const result = await signAndSubmitTransaction(payload);
 
-          if (result.success) {
-            // Also update local store
+          if (result && result.hash) {
+            toast.success(`Successfully bought ${token.symbol}!`, {
+              id: toastId,
+              description: `Transaction: ${result.hash.slice(0, 10)}...`,
+            });
+
+            // Update local store
             buyTokenStore(token, 1);
-            toast.success(`Bought 1 ${token.symbol}`);
           } else {
+            toast.error(`Failed to buy ${token.symbol}`, { id: toastId });
+            toast.dismiss(toastId);
             restoreCard(token.id);
           }
-        } catch (error) {
+        } catch (error: any) {
+          const isUserRejection =
+            error?.message?.includes("User rejected") ||
+            error?.message?.includes("rejected");
+
           console.error("Token purchase failed:", error);
+          toast.error(
+            isUserRejection
+              ? "Transaction rejected"
+              : `Failed to buy ${token.symbol}`,
+            {
+              description: isUserRejection
+                ? "You cancelled the transaction."
+                : error?.message || "Please try again.",
+            }
+          );
           restoreCard(token.id);
-          toast.error(`Failed to buy ${token.symbol}`);
         }
       }
     } else if (direction === "up") {
@@ -286,8 +304,7 @@ export function TradePage() {
             tokens.length === 0 ||
             blockchainLoading ||
             supabaseLoading ||
-            !isConnected ||
-            isContractLoading
+            !isConnected
           }
           className="h-20 w-20 rounded-full border-2 border-blaze-black bg-blaze-white text-blaze-black hover:bg-blaze-black/10 active:bg-blaze-black/20 disabled:opacity-50"
         >
@@ -299,8 +316,7 @@ export function TradePage() {
             tokens.length === 0 ||
             blockchainLoading ||
             supabaseLoading ||
-            !isConnected ||
-            isContractLoading
+            !isConnected
           }
           className="h-20 w-20 rounded-full border-2 border-blaze-black bg-blaze-white text-blaze-black hover:bg-blaze-black/10 active:bg-blaze-black/20 disabled:opacity-50"
         >
@@ -312,8 +328,7 @@ export function TradePage() {
             tokens.length === 0 ||
             blockchainLoading ||
             supabaseLoading ||
-            !isConnected ||
-            isContractLoading
+            !isConnected
           }
           className="h-20 w-20 rounded-full border-2 border-blaze-orange bg-blaze-orange text-blaze-black hover:bg-blaze-orange/80 active:bg-blaze-orange/90 disabled:opacity-50"
         >

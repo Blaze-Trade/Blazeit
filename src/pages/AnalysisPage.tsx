@@ -169,7 +169,7 @@ export function AnalysisPage() {
         toast.success(
           `Sold ${sellCandidate.quantity.toFixed(2)} ${sellCandidate.symbol}`
         );
-        setSellCandidate(null);
+      setSellCandidate(null);
       } else {
         toast.error(result.error || "Failed to sell token");
       }
