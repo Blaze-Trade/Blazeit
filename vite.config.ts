@@ -5,8 +5,12 @@ import react from '@vitejs/plugin-react'
 import { cloudflare } from "@cloudflare/vite-plugin";
 
 // https://vite.dev/config/
-export default defineConfig({
-  plugins: [react(), cloudflare()],
+export default defineConfig(({ mode }) => ({
+  plugins: [
+    react(), 
+    // Only use Cloudflare plugin in production builds
+    ...(mode === 'production' ? [cloudflare()] : [])
+  ],
   build: {
     minify: false,
     // Disable inline source maps in production to keep asset sizes small
@@ -53,4 +57,4 @@ export default defineConfig({
   },
   // Clear cache more aggressively
   cacheDir: 'node_modules/.vite'
-})
+}))

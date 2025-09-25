@@ -257,5 +257,43 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
       return bad(c, 'Failed to clear watchlist');
     }
   });
+
+  // CLIENT ERROR REPORTING
+  app.post('/api/client-errors', async (c) => {
+    try {
+      const errorData = await c.req.json();
+      console.error('[CLIENT ERROR]', errorData);
+      return ok(c, { success: true });
+    } catch (error) {
+      console.error('Failed to log client error:', error);
+      return bad(c, 'Failed to log error');
+    }
+  });
+
+  // IMAGE UPLOAD
+  app.post('/api/upload-image', async (c) => {
+    try {
+      const formData = await c.req.formData();
+      const file = formData.get('file') as File;
+      
+      if (!file) {
+        return bad(c, 'No file provided');
+      }
+
+      // For now, return a mock URL since we don't have actual image storage
+      // In production, you would upload to a service like Cloudflare Images, AWS S3, etc.
+      const mockImageUrl = `https://via.placeholder.com/400x400/FF6B35/FFFFFF?text=${encodeURIComponent(file.name)}`;
+      
+      return ok(c, { 
+        success: true, 
+        url: mockImageUrl,
+        filename: file.name,
+        size: file.size 
+      });
+    } catch (error) {
+      console.error('Image upload failed:', error);
+      return bad(c, 'Image upload failed');
+    }
+  });
 }
 

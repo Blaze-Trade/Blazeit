@@ -9,7 +9,15 @@
     "lint": "eslint --cache -f json --quiet .",
     "preview": "bun run build && vite preview --host 0.0.0.0 --port ${PORT:-4173}",
     "deploy": "bun run build && wrangler deploy",
-    "cf-typegen": "wrangler types"
+    "cf-typegen": "wrangler types",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:run": "vitest run",
+    "move:init": "aptos init --profile blaze-devnet",
+    "move:compile": "aptos move compile --package-dir move/BlazeIt",
+    "move:test": "aptos move test --package-dir move/BlazeIt",
+    "move:publish": "aptos move publish --package-dir move/BlazeIt --profile blaze-devnet",
+    "move:upgrade": "aptos move publish --package-dir move/BlazeIt --profile blaze-devnet --upgrade-policy compatible"
   },
   "dependencies": {
     "@aptos-labs/ts-sdk": "^5.1.0",
@@ -95,16 +103,19 @@
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
+    "@vitest/ui": "^3.2.4",
     "aptos": "^1.21.0",
     "autoprefixer": "^10.4.21",
     "eslint": "^9.31.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.19",
     "globals": "^16.0.0",
+    "jsdom": "^27.0.0",
     "postcss": "^8.5.3",
     "tailwindcss": "^3.4.17",
     "typescript": "5.8",
     "typescript-eslint": "^8.26.1",
-    "vite": "^6.3.1"
+    "vite": "^6.3.1",
+    "vitest": "^3.2.4"
   }
 }

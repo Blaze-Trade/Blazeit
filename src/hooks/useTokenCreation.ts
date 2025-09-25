@@ -2,6 +2,7 @@ import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { toast } from "sonner";
 import { useState } from "react";
 import { imageUploadService, ImageUploadResult } from "@/lib/image-upload";
+import { useLaunchpadIntegration } from "./useLaunchpadIntegration";
 
 interface TokenCreationData {
   symbol: string;
@@ -21,13 +22,14 @@ let aptosSingleton: any | null = null;
 async function getAptosClient() {
   if (aptosSingleton) return aptosSingleton;
   const mod = await import("@aptos-labs/ts-sdk");
-  const config = new mod.AptosConfig({ network: mod.Network.TESTNET });
+  const config = new mod.AptosConfig({ network: mod.Network.DEVNET });
   aptosSingleton = new mod.Aptos(config);
   return aptosSingleton;
 }
 
 export function useTokenCreation() {
-  const { signAndSubmitTransaction, account } = useWallet();
+  const { account } = useWallet();
+  const { createToken: contractCreateToken, isLoading } = useLaunchpadIntegration();
   const [isCreating, setIsCreating] = useState(false);
 
   const createToken = async (tokenData: TokenCreationData): Promise<TokenCreationResult> => {
@@ -37,46 +39,19 @@ export function useTokenCreation() {
     }
 
     setIsCreating(true);
-    const toastId = toast.loading("Creating token...", {
-      description: "Please approve the transaction in your wallet.",
-    });
 
     try {
-      const client = await getAptosClient();
-      
-      // For now, we'll create a simple coin using the Aptos framework
-      // In a real implementation, you might want to use a custom token standard
-      const payload = {
-        function: "0x1::managed_coin::initialize",
-        typeArguments: [],
-        functionArguments: [
-          tokenData.name, // name
-          tokenData.symbol, // symbol
-          "8", // decimals
-          "false", // monitor_supply
-        ],
-      };
-
-      const result = await signAndSubmitTransaction(payload);
-      await client.waitForTransaction({ transactionHash: result.hash });
-
-      toast.success("Token created successfully!", {
-        id: toastId,
-        description: `Transaction: ${result.hash.slice(0, 10)}...`,
+      const result = await contractCreateToken({
+        name: tokenData.name,
+        symbol: tokenData.symbol,
+        description: tokenData.description,
+        imageUrl: tokenData.imageUrl || "",
+        decimals: 8,
       });
 
-      return { success: true, hash: result.hash };
+      return result;
     } catch (error: any) {
       console.error("Token creation failed:", error);
-      
-      const isUserRejection = error.message?.includes("User rejected the request");
-      toast.error(isUserRejection ? "Transaction rejected" : "Token creation failed", {
-        id: toastId,
-        description: isUserRejection 
-          ? "You cancelled the transaction." 
-          : (error?.message || "Please try again."),
-      });
-
       return { success: false, error };
     } finally {
       setIsCreating(false);

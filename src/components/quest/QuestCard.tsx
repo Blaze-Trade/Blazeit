@@ -2,6 +2,8 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { Quest } from "@shared/types";
 import { usePortfolioStore } from "@/stores/portfolioStore";
+import { useQuestManagement } from "@/hooks/useQuestManagement";
+import { useState } from "react";
 interface QuestCardProps {
   quest: Quest;
 }
@@ -13,12 +15,31 @@ const statusStyles = {
 export function QuestCard({ quest }: QuestCardProps) {
   const joinedQuests = usePortfolioStore((state) => state.joinedQuests);
   const isJoined = joinedQuests.includes(quest.id);
+  const { joinQuest, isJoining } = useQuestManagement();
+  const [isJoiningQuest, setIsJoiningQuest] = useState(false);
+
+  const handleJoinQuest = async () => {
+    if (isJoined) return;
+    
+    setIsJoiningQuest(true);
+    try {
+      const result = await joinQuest(quest.id);
+      if (result.success) {
+        // Quest joined successfully
+      }
+    } catch (error) {
+      console.error('Failed to join quest:', error);
+    } finally {
+      setIsJoiningQuest(false);
+    }
+  };
+
   const getButtonText = () => {
     if (isJoined) {
       return "Build Portfolio";
     }
     if (quest.status === 'upcoming') {
-      return "View & Join";
+      return isJoiningQuest || isJoining ? "Joining..." : "View & Join";
     }
     return "View Details";
   };
@@ -48,7 +69,11 @@ export function QuestCard({ quest }: QuestCardProps) {
           <p className="text-3xl font-bold">{quest.duration}</p>
         </div>
       </div>
-      <Button className="w-full h-14 rounded-none border-2 border-blaze-black bg-blaze-black text-blaze-white text-xl font-bold uppercase tracking-wider hover:bg-blaze-orange hover:text-blaze-black active:translate-y-px active:translate-x-px disabled:bg-blaze-black/50 disabled:border-blaze-black/50 disabled:text-blaze-white/50" disabled={quest.status === 'ended'}>
+      <Button 
+        onClick={handleJoinQuest}
+        className="w-full h-14 rounded-none border-2 border-blaze-black bg-blaze-black text-blaze-white text-xl font-bold uppercase tracking-wider hover:bg-blaze-orange hover:text-blaze-black active:translate-y-px active:translate-x-px disabled:bg-blaze-black/50 disabled:border-blaze-black/50 disabled:text-blaze-white/50" 
+        disabled={quest.status === 'ended' || isJoiningQuest || isJoining}
+      >
         {getButtonText()}
       </Button>
     </div>

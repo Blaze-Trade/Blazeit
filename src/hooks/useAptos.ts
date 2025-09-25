@@ -5,7 +5,7 @@ let aptosSingleton: any | null = null;
 async function getAptosClient() {
   if (aptosSingleton) return aptosSingleton;
   const mod = await import("@aptos-labs/ts-sdk");
-  const config = new mod.AptosConfig({ network: mod.Network.TESTNET });
+  const config = new mod.AptosConfig({ network: mod.Network.DEVNET });
   aptosSingleton = new mod.Aptos(config);
   return aptosSingleton;
 }
