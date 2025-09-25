@@ -11,6 +11,8 @@ export interface Token {
   change24h: number;
   marketCap: number;
   logoUrl: string;
+  address?: string; // Optional token contract address
+  decimals?: number; // Optional token decimals
 }
 export interface Quest {
   id: string;
