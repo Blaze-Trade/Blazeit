@@ -5,13 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 3000",
-    "dev:worker": "wrangler dev --port 8787",
-    "dev:full": "concurrently \"npm run dev:worker\" \"npm run dev\"",
     "build": "vite build",
     "lint": "eslint --cache -f json --quiet .",
     "preview": "bun run build && vite preview --host 0.0.0.0 --port ${PORT:-4173}",
-    "deploy": "bun run build && wrangler deploy",
-    "cf-typegen": "wrangler types",
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:run": "vitest run",
@@ -62,7 +58,6 @@
     "@typescript-eslint/eslint-plugin": "^8.38.0",
     "@typescript-eslint/parser": "^8.38.0",
     "class-variance-authority": "^0.7.1",
-    "cloudflare": "^5.0.0",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "date-fns": "^4.1.0",
@@ -70,7 +65,6 @@
     "eslint-import-resolver-typescript": "^4.4.4",
     "eslint-plugin-import": "^2.32.0",
     "framer-motion": "^12.23.0",
-    "hono": "^4.8.5",
     "immer": "^10.1.1",
     "input-otp": "^1.4.2",
     "lucide-react": "^0.525.0",
@@ -99,8 +93,6 @@
     "zustand": "^5.0.6"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "^1.9.4",
-    "@cloudflare/workers-types": "^4.20250807.0",
     "@eslint/js": "^9.22.0",
     "@types/node": "^22.15.3",
     "@types/react": "^18.3.1",

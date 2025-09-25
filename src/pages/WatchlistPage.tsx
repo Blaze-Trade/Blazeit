@@ -1,60 +1,37 @@
-import { usePortfolioStore } from "@/stores/portfolioStore";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import {
-  Star,
-  TrendingUp,
-  TrendingDown,
-  X,
-  RefreshCw,
-  Wallet,
-} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Toaster, toast } from "@/components/ui/sonner";
-import { api } from "@/lib/api-client";
-import { useEffect, useState, useCallback } from "react";
-import type { Token } from "@shared/types";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { useSupabaseWatchlist } from "@/hooks/useSupabaseWatchlist";
+import { usePortfolioStore } from "@/stores/portfolioStore";
+import {
+  RefreshCw,
+  Star,
+  TrendingDown,
+  TrendingUp,
+  Wallet,
+  X,
+} from "lucide-react";
+import { useState } from "react";
 
 export function WatchlistPage() {
   const { isConnected, address, removeFromWatchlist } = usePortfolioStore();
-  const [watchlist, setWatchlist] = useState<Token[]>([]);
-  const [loading, setLoading] = useState(true);
+  const {
+    watchlist,
+    loading,
+    error,
+    removeFromWatchlist: removeFromWatchlistSupabase,
+    refetch,
+  } = useSupabaseWatchlist(address);
+
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchWatchlist = useCallback(
-    async (showRefreshIndicator = false) => {
-      if (!isConnected || !address) {
-        setWatchlist([]);
-        setLoading(false);
-        return;
-      }
-
-      try {
-        if (showRefreshIndicator) {
-          setRefreshing(true);
-        } else {
-          setLoading(true);
-        }
-        setError(null);
-
-        const data = await api<{ items: Token[] }>(`/api/watchlist/${address}`);
-        setWatchlist(data.items);
-      } catch (err) {
-        setError("Failed to fetch watchlist");
-        toast.error("Failed to fetch watchlist");
-        console.error(err);
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
-      }
-    },
-    [isConnected, address]
-  );
-
-  useEffect(() => {
-    fetchWatchlist();
-  }, [fetchWatchlist]);
 
   const handleRemove = async (tokenName: string, tokenId: string) => {
     if (!isConnected || !address) {
@@ -63,26 +40,29 @@ export function WatchlistPage() {
     }
 
     try {
-      await api(`/api/watchlist/${address}/remove`, {
-        method: "POST",
-        body: JSON.stringify({ tokenId }),
-      });
+      const result = await removeFromWatchlistSupabase(tokenId);
 
-      // Update local state
-      setWatchlist((prev) => prev.filter((token) => token.id !== tokenId));
-
-      // Also update the store for consistency
-      removeFromWatchlist(tokenId);
-
-      toast.success(`${tokenName} removed from watchlist`);
+      if (result.success) {
+        // Also update the store for consistency
+        removeFromWatchlist(tokenId);
+        toast.success(`${tokenName} removed from watchlist`);
+      } else {
+        toast.error("Failed to remove token from watchlist");
+        console.error(result.error);
+      }
     } catch (error) {
       toast.error("Failed to remove token from watchlist");
       console.error(error);
     }
   };
 
-  const handleRefresh = () => {
-    fetchWatchlist(true);
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refetch();
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   if (!isConnected) {
@@ -140,7 +120,7 @@ export function WatchlistPage() {
             </h3>
             <p className="mt-2 text-red-800">{error}</p>
             <Button
-              onClick={() => fetchWatchlist()}
+              onClick={handleRefresh}
               className="mt-4 h-12 rounded-none border-2 border-red-600 bg-red-600 text-white font-bold uppercase hover:bg-red-700"
             >
               Try Again

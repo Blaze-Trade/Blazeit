@@ -24,6 +24,8 @@ export interface Quest {
   status: "upcoming" | "active" | "ended";
   startTime?: string; // ISO string
   endTime?: string; // ISO string
+  creatorId?: string; // Quest creator's user ID
+  creatorWalletAddress?: string; // Quest creator's wallet address (fetched from users table)
 }
 export interface LeaderboardEntry {
   rank: number;

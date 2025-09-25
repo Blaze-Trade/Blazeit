@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { api } from "@/lib/api-client";
 import { usePortfolioStore } from "@/stores/portfolioStore";
+import { useSupabaseQuests } from "@/hooks/useSupabaseQuests";
 import { useQuestManagement } from "@/hooks/useQuestManagement";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Calculator, Calendar, Clock, Info, Wallet } from "lucide-react";
@@ -59,7 +60,8 @@ type QuestFormValues = z.infer<typeof questSchema>;
 
 export function CreateQuestPage() {
   const navigate = useNavigate();
-  const isConnected = usePortfolioStore((state) => state.isConnected);
+  const { isConnected, address } = usePortfolioStore();
+  const { createQuest: createQuestSupabase } = useSupabaseQuests();
   const { createQuest, isCreating } = useQuestManagement();
 
   // Set default times: start in 1 hour, end in 1 week
@@ -131,22 +133,32 @@ export function CreateQuestPage() {
   };
 
   const onSubmit = async (values: QuestFormValues) => {
+    if (!address) {
+      toast.error("Please connect your wallet to create a quest.");
+      return;
+    }
+
     try {
       const startDate = new Date(values.startTime);
       const endDate = new Date(values.endTime);
 
-      const result = await createQuest({
+      const result = await createQuestSupabase({
         name: values.name,
         description: `A trading quest with ${formatDuration(calculatedDuration)} duration`,
         entryFee: values.entryFee,
         prizePool: calculatedPrizePool,
+        durationHours: calculatedDuration,
         startTime: startDate,
         endTime: endDate,
         maxParticipants: 100,
+        creatorWalletAddress: address,
       });
 
       if (result.success) {
+        toast.success("Quest created successfully!");
         navigate("/quests");
+      } else {
+        toast.error(result.error || "Failed to create quest. Please try again.");
       }
     } catch (error) {
       toast.error("Failed to create quest. Please try again.");

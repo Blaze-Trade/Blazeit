@@ -1,0 +1,1193 @@
+import type {
+  ApiResponse,
+  Holding,
+  LeaderboardEntry,
+  Quest,
+  QuestPortfolio,
+  Token
+} from '@shared/types';
+import { supabase } from './supabase';
+
+// Database types (matching our Supabase schema)
+export interface User {
+  id: string;
+  wallet_address: string;
+  username?: string;
+  email?: string;
+  avatar_url?: string;
+  balance: number;
+  total_winnings: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface QuestParticipant {
+  id: string;
+  quest_id: string;
+  user_id: string;
+  joined_at: string;
+  entry_fee_paid: number;
+  final_rank?: number;
+  prize_won: number;
+}
+
+export interface Transaction {
+  id: string;
+  user_id: string;
+  quest_id?: string;
+  type: 'quest_entry' | 'prize_payout' | 'deposit' | 'withdrawal' | 'trade_buy' | 'trade_sell';
+  amount: number;
+  token_symbol?: string;
+  status: 'pending' | 'completed' | 'failed';
+  blockchain_tx_hash?: string;
+  metadata?: any;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TokenCreationRequest {
+  id: string;
+  creator_id: string;
+  name: string;
+  symbol: string;
+  description?: string;
+  image_url?: string;
+  max_supply?: number;
+  target_supply?: number;
+  virtual_liquidity?: number;
+  curve_exponent: number;
+  mint_limit_per_address?: number;
+  status: 'pending' | 'approved' | 'rejected' | 'deployed';
+  blockchain_address?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// Helper function to handle Supabase responses
+const handleResponse = <T>(data: T | null, error: any): ApiResponse<T> => {
+  if (error) {
+    console.error('Supabase error:', error);
+    return { success: false, error: error.message };
+  }
+  return { success: true, data };
+};
+
+// Helper function to get user by wallet address
+const getUserByWallet = async (walletAddress: string): Promise<User | null> => {
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('wallet_address', walletAddress)
+    .single();
+
+  if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+    console.error('Error fetching user:', error);
+    return null;
+  }
+
+  return data;
+};
+
+// Helper function to create or get user
+const createOrGetUser = async (walletAddress: string): Promise<User> => {
+  let user = await getUserByWallet(walletAddress);
+
+  if (!user) {
+    const { data, error } = await supabase
+      .from('users')
+      .insert({ wallet_address: walletAddress })
+      .select()
+      .single();
+
+    if (error) {
+      throw new Error(`Failed to create user: ${error.message}`);
+    }
+
+    user = data;
+  }
+
+  return user;
+};
+
+// TOKEN API
+export const tokenApi = {
+  // Get all tokens
+  async getTokens(): Promise<ApiResponse<{ items: Token[]; next: string | null }>> {
+    const { data, error } = await supabase
+      .from('tokens')
+      .select('*')
+      .eq('is_active', true)
+      .order('market_cap', { ascending: false });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    const tokens: Token[] = data.map(token => ({
+      id: token.id,
+      symbol: token.symbol,
+      name: token.name,
+      price: parseFloat(token.price),
+      change24h: parseFloat(token.change_24h),
+      marketCap: parseFloat(token.market_cap),
+      logoUrl: token.logo_url || '',
+      address: token.address,
+      decimals: token.decimals,
+    }));
+
+    // Shuffle tokens for variety
+    const shuffledTokens = tokens.sort(() => Math.random() - 0.5);
+
+    return { success: true, data: { items: shuffledTokens, next: null } };
+  },
+
+  // Get token by symbol
+  async getTokenBySymbol(symbol: string): Promise<ApiResponse<Token>> {
+    const { data, error } = await supabase
+      .from('tokens')
+      .select('*')
+      .eq('symbol', symbol)
+      .eq('is_active', true)
+      .single();
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    const token: Token = {
+      id: data.id,
+      symbol: data.symbol,
+      name: data.name,
+      price: parseFloat(data.price),
+      change24h: parseFloat(data.change_24h),
+      marketCap: parseFloat(data.market_cap),
+      logoUrl: data.logo_url || '',
+      address: data.address,
+      decimals: data.decimals,
+    };
+
+    return { success: true, data: token };
+  },
+
+  // Update token price
+  async updateTokenPrice(symbol: string, price: number, change24h: number, marketCap: number): Promise<ApiResponse<void>> {
+    const { error } = await supabase
+      .from('tokens')
+      .update({
+        price: price.toString(),
+        change_24h: change24h.toString(),
+        market_cap: marketCap.toString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('symbol', symbol);
+
+    return handleResponse(null, error);
+  },
+};
+
+// QUEST API
+export const questApi = {
+  // Get all quests
+  async getQuests(): Promise<ApiResponse<{ items: Quest[]; next: string | null }>> {
+    const { data, error } = await supabase
+      .from('quests')
+      .select(`
+        *,
+        creator:users!quests_creator_id_fkey(username, wallet_address)
+      `)
+      .order('start_time', { ascending: true });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    const quests: Quest[] = data.map(quest => ({
+      id: quest.id,
+      name: quest.name,
+      entryFee: parseFloat(quest.entry_fee),
+      prizePool: parseFloat(quest.prize_pool),
+      duration: `${quest.duration_hours}h`,
+      participants: quest.current_participants,
+      status: quest.status,
+      startTime: quest.start_time,
+      endTime: quest.end_time,
+    }));
+
+    // Sort by status: active, upcoming, ended
+    const sortedQuests = quests.sort((a, b) => {
+      const statusOrder = { active: 0, upcoming: 1, ended: 2 };
+      return statusOrder[a.status] - statusOrder[b.status];
+    });
+
+    return { success: true, data: { items: sortedQuests, next: null } };
+  },
+
+  // Get quest by ID
+  async getQuest(questId: string): Promise<ApiResponse<Quest>> {
+    const { data, error } = await supabase
+      .from('quests')
+      .select(`
+        *,
+        creator:users!quests_creator_id_fkey(username, wallet_address)
+      `)
+      .eq('id', questId)
+      .single();
+
+    if (error) {
+      return { success: false, error: 'Quest not found' };
+    }
+
+    const quest: Quest = {
+      id: data.id,
+      name: data.name,
+      entryFee: parseFloat(data.entry_fee),
+      prizePool: parseFloat(data.prize_pool),
+      duration: `${data.duration_hours}h`,
+      participants: data.current_participants,
+      status: data.status,
+      startTime: data.start_time,
+      endTime: data.end_time,
+    };
+
+    return { success: true, data: quest };
+  },
+
+  // Create quest
+  async createQuest(questData: {
+    name: string;
+    description?: string;
+    entryFee: number;
+    prizePool: number;
+    durationHours: number;
+    startTime: Date;
+    endTime: Date;
+    maxParticipants?: number;
+    creatorWalletAddress: string;
+  }): Promise<ApiResponse<Quest>> {
+    try {
+      const user = await createOrGetUser(questData.creatorWalletAddress);
+
+      const { data, error } = await supabase
+        .from('quests')
+        .insert({
+          name: questData.name,
+          description: questData.description,
+          entry_fee: questData.entryFee.toString(),
+          prize_pool: questData.prizePool.toString(),
+          duration_hours: questData.durationHours,
+          start_time: questData.startTime.toISOString(),
+          end_time: questData.endTime.toISOString(),
+          max_participants: questData.maxParticipants || 100,
+          creator_id: user.id,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      const quest: Quest = {
+        id: data.id,
+        name: data.name,
+        entryFee: parseFloat(data.entry_fee),
+        prizePool: parseFloat(data.prize_pool),
+        duration: `${data.duration_hours}h`,
+        participants: data.current_participants,
+        status: data.status,
+        startTime: data.start_time,
+        endTime: data.end_time,
+      };
+
+      return { success: true, data: quest };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Join quest
+  async joinQuest(questId: string, walletAddress: string): Promise<ApiResponse<QuestPortfolio>> {
+    try {
+      const user = await createOrGetUser(walletAddress);
+
+      // Get quest details
+      const questResponse = await this.getQuest(questId);
+      if (!questResponse.success || !questResponse.data) {
+        return { success: false, error: 'Quest not found' };
+      }
+
+      const quest = questResponse.data;
+
+      // Check if user already joined
+      const { data: existingParticipant, error: participantCheckError } = await supabase
+        .from('quest_participants')
+        .select('*')
+        .eq('quest_id', questId)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (existingParticipant) {
+        // Return existing portfolio
+        const portfolioResponse = await this.getQuestPortfolio(questId, walletAddress);
+        return portfolioResponse;
+      }
+
+      // Check if quest is joinable
+      const now = new Date();
+      const startTime = new Date(quest.startTime!);
+      const endTime = new Date(quest.endTime!);
+
+      if (now >= startTime) {
+        return { success: false, error: 'Cannot join quest after it has started' };
+      }
+
+      if (now >= endTime) {
+        return { success: false, error: 'Cannot join quest after it has ended' };
+      }
+
+      // Start transaction
+      const { error: participantError } = await supabase
+        .from('quest_participants')
+        .insert({
+          quest_id: questId,
+          user_id: user.id,
+          entry_fee_paid: quest.entryFee.toString(),
+        });
+
+      if (participantError) {
+        return { success: false, error: participantError.message };
+      }
+
+      // Update user balance
+      const { error: balanceError } = await supabase
+        .from('users')
+        .update({
+          balance: (user.balance - quest.entryFee).toString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id);
+
+      if (balanceError) {
+        return { success: false, error: balanceError.message };
+      }
+
+      // Update quest participant count
+      const { error: questError } = await supabase
+        .from('quests')
+        .update({
+          current_participants: quest.participants + 1,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', questId);
+
+      if (questError) {
+        return { success: false, error: questError.message };
+      }
+
+      // Create transaction record
+      await supabase
+        .from('transactions')
+        .insert({
+          user_id: user.id,
+          quest_id: questId,
+          type: 'quest_entry',
+          amount: quest.entryFee.toString(),
+          status: 'completed',
+        });
+
+      // Return new portfolio
+      const portfolio: QuestPortfolio = {
+        id: `${questId}:${user.id}`,
+        questId,
+        userId: walletAddress,
+        joinedAt: Date.now(),
+        holdings: [],
+      };
+
+      return { success: true, data: portfolio };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Get quest portfolio
+  async getQuestPortfolio(questId: string, walletAddress: string): Promise<ApiResponse<QuestPortfolio>> {
+    try {
+      const user = await getUserByWallet(walletAddress);
+      if (!user) {
+        return { success: false, error: 'User not found' };
+      }
+
+      const { data: portfolioData, error } = await supabase
+        .from('quest_portfolios')
+        .select(`
+          *,
+          token:tokens(*)
+        `)
+        .eq('quest_id', questId)
+        .eq('user_id', user.id);
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      const holdings: Holding[] = portfolioData.map(holding => ({
+        id: holding.token.id,
+        symbol: holding.token.symbol,
+        name: holding.token.name,
+        price: parseFloat(holding.token.price),
+        change24h: parseFloat(holding.token.change_24h),
+        marketCap: parseFloat(holding.token.market_cap),
+        logoUrl: holding.token.logo_url || '',
+        address: holding.token.address,
+        decimals: holding.token.decimals,
+        quantity: parseFloat(holding.quantity),
+        cost: parseFloat(holding.total_cost),
+        value: parseFloat(holding.current_value),
+      }));
+
+      const portfolio: QuestPortfolio = {
+        id: `${questId}:${user.id}`,
+        questId,
+        userId: walletAddress,
+        joinedAt: Date.now(), // We'll need to get this from quest_participants
+        holdings,
+      };
+
+      return { success: true, data: portfolio };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Buy token in quest
+  async buyTokenInQuest(questId: string, walletAddress: string, token: Token, quantity: number): Promise<ApiResponse<QuestPortfolio>> {
+    try {
+      const user = await getUserByWallet(walletAddress);
+      if (!user) {
+        return { success: false, error: 'User not found' };
+      }
+
+      // Check if user is participant
+      const { data: participant, error: participantError } = await supabase
+        .from('quest_participants')
+        .select('*')
+        .eq('quest_id', questId)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (!participant) {
+        return { success: false, error: 'User has not joined this quest' };
+      }
+
+      const cost = token.price * quantity;
+
+      // Check if user already has this token in portfolio
+      const { data: existingHolding, error: holdingError } = await supabase
+        .from('quest_portfolios')
+        .select('*')
+        .eq('quest_id', questId)
+        .eq('user_id', user.id)
+        .eq('token_id', token.id)
+        .maybeSingle();
+
+      if (existingHolding) {
+        // Update existing holding
+        const newQuantity = parseFloat(existingHolding.quantity) + quantity;
+        const newCost = parseFloat(existingHolding.total_cost) + cost;
+        const newValue = newQuantity * token.price;
+
+        const { error } = await supabase
+          .from('quest_portfolios')
+          .update({
+            quantity: newQuantity.toString(),
+            total_cost: newCost.toString(),
+            current_value: newValue.toString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingHolding.id);
+
+        if (error) {
+          return { success: false, error: error.message };
+        }
+      } else {
+        // Create new holding
+        const { error } = await supabase
+          .from('quest_portfolios')
+          .insert({
+            quest_id: questId,
+            user_id: user.id,
+            token_id: token.id,
+            quantity: quantity.toString(),
+            entry_price: token.price.toString(),
+            current_value: cost.toString(),
+            total_cost: cost.toString(),
+          });
+
+        if (error) {
+          return { success: false, error: error.message };
+        }
+      }
+
+      // Return updated portfolio
+      return await this.getQuestPortfolio(questId, walletAddress);
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Sell token in quest
+  async sellTokenInQuest(questId: string, walletAddress: string, tokenId: string, quantity: number): Promise<ApiResponse<QuestPortfolio>> {
+    try {
+      const user = await getUserByWallet(walletAddress);
+      if (!user) {
+        return { success: false, error: 'User not found' };
+      }
+
+      // Get existing holding
+      const { data: holding, error: fetchError } = await supabase
+        .from('quest_portfolios')
+        .select('*')
+        .eq('quest_id', questId)
+        .eq('user_id', user.id)
+        .eq('token_id', tokenId)
+        .single();
+
+      if (fetchError || !holding) {
+        return { success: false, error: 'Token not found in portfolio' };
+      }
+
+      const currentQuantity = parseFloat(holding.quantity);
+      const sellQuantity = Math.min(quantity, currentQuantity);
+
+      if (sellQuantity <= 0) {
+        return { success: false, error: 'Invalid sell quantity' };
+      }
+
+      const averageCost = parseFloat(holding.total_cost) / currentQuantity;
+      const newQuantity = currentQuantity - sellQuantity;
+      const newCost = newQuantity * averageCost;
+
+      if (newQuantity === 0) {
+        // Remove holding completely
+        const { error } = await supabase
+          .from('quest_portfolios')
+          .delete()
+          .eq('id', holding.id);
+
+        if (error) {
+          return { success: false, error: error.message };
+        }
+      } else {
+        // Update holding
+        const { error } = await supabase
+          .from('quest_portfolios')
+          .update({
+            quantity: newQuantity.toString(),
+            total_cost: newCost.toString(),
+            current_value: newQuantity * parseFloat(holding.entry_price), // Simplified
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', holding.id);
+
+        if (error) {
+          return { success: false, error: error.message };
+        }
+      }
+
+      // Return updated portfolio
+      return await this.getQuestPortfolio(questId, walletAddress);
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Get quest leaderboard
+  async getQuestLeaderboard(questId: string): Promise<ApiResponse<LeaderboardEntry[]>> {
+    const { data, error } = await supabase
+      .from('leaderboard_entries')
+      .select(`
+        *,
+        user:users!leaderboard_entries_user_id_fkey(wallet_address)
+      `)
+      .eq('quest_id', questId)
+      .order('rank', { ascending: true });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    const leaderboard: LeaderboardEntry[] = data.map(entry => ({
+      rank: entry.rank,
+      address: entry.user.wallet_address,
+      portfolioValue: parseFloat(entry.portfolio_value),
+      pnlPercent: parseFloat(entry.pnl_percent),
+    }));
+
+    return { success: true, data: leaderboard };
+  },
+};
+
+// WATCHLIST API
+export const watchlistApi = {
+  // Get user watchlist
+  async getWatchlist(walletAddress: string): Promise<ApiResponse<{ items: Token[] }>> {
+    try {
+      const user = await getUserByWallet(walletAddress);
+      if (!user) {
+        return { success: true, data: { items: [] } };
+      }
+
+      const { data, error } = await supabase
+        .from('watchlists')
+        .select(`
+          token:tokens(*)
+        `)
+        .eq('user_id', user.id);
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      const tokens: Token[] = (data || []).map((item: any) => ({
+        id: item.token?.id || '',
+        symbol: item.token?.symbol || '',
+        name: item.token?.name || '',
+        price: parseFloat(item.token?.price || '0'),
+        change24h: parseFloat(item.token?.change_24h || '0'),
+        marketCap: parseFloat(item.token?.market_cap || '0'),
+        logoUrl: item.token?.logo_url || '',
+        address: item.token?.address || '',
+        decimals: item.token?.decimals || 8,
+      }));
+
+      return { success: true, data: { items: tokens } };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Add token to watchlist
+  async addToWatchlist(walletAddress: string, tokenId: string): Promise<ApiResponse<void>> {
+    try {
+      const user = await createOrGetUser(walletAddress);
+
+      const { error } = await supabase
+        .from('watchlists')
+        .insert({
+          user_id: user.id,
+          token_id: tokenId,
+        });
+
+      if (error && error.code !== '23505') { // 23505 = unique constraint violation (already exists)
+        return { success: false, error: error.message };
+      }
+
+      return { success: true };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Remove token from watchlist
+  async removeFromWatchlist(walletAddress: string, tokenId: string): Promise<ApiResponse<void>> {
+    try {
+      const user = await getUserByWallet(walletAddress);
+      if (!user) {
+        return { success: true };
+      }
+
+      const { error } = await supabase
+        .from('watchlists')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('token_id', tokenId);
+
+      return handleResponse(null, error);
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Clear watchlist
+  async clearWatchlist(walletAddress: string): Promise<ApiResponse<void>> {
+    try {
+      const user = await getUserByWallet(walletAddress);
+      if (!user) {
+        return { success: true };
+      }
+
+      const { error } = await supabase
+        .from('watchlists')
+        .delete()
+        .eq('user_id', user.id);
+
+      return handleResponse(null, error);
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  },
+};
+
+// USER PORTFOLIO API
+export const portfolioApi = {
+  // Get user portfolio
+  async getUserPortfolio(walletAddress: string): Promise<ApiResponse<Holding[]>> {
+    try {
+      const user = await getUserByWallet(walletAddress);
+      if (!user) {
+        return { success: true, data: [] };
+      }
+
+      const { data, error } = await supabase
+        .from('user_portfolios')
+        .select(`
+          *,
+          token:tokens(*)
+        `)
+        .eq('user_id', user.id);
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      const holdings: Holding[] = data.map(holding => ({
+        id: holding.token.id,
+        symbol: holding.token.symbol,
+        name: holding.token.name,
+        price: parseFloat(holding.token.price),
+        change24h: parseFloat(holding.token.change_24h),
+        marketCap: parseFloat(holding.token.market_cap),
+        logoUrl: holding.token.logo_url || '',
+        address: holding.token.address,
+        decimals: holding.token.decimals,
+        quantity: parseFloat(holding.quantity),
+        cost: parseFloat(holding.total_cost),
+        value: parseFloat(holding.current_value),
+      }));
+
+      return { success: true, data: holdings };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Buy token (real trading)
+  async buyToken(walletAddress: string, token: Token, quantity: number): Promise<ApiResponse<void>> {
+    try {
+      const user = await createOrGetUser(walletAddress);
+      const cost = token.price * quantity;
+
+      // Check if user already has this token
+      const { data: existingHolding } = await supabase
+        .from('user_portfolios')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('token_id', token.id)
+        .single();
+
+      if (existingHolding) {
+        // Update existing holding
+        const newQuantity = parseFloat(existingHolding.quantity) + quantity;
+        const newCost = parseFloat(existingHolding.total_cost) + cost;
+        const newAverageCost = newCost / newQuantity;
+
+        const { error } = await supabase
+          .from('user_portfolios')
+          .update({
+            quantity: newQuantity.toString(),
+            total_cost: newCost.toString(),
+            average_cost: newAverageCost.toString(),
+            current_value: (newQuantity * token.price).toString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingHolding.id);
+
+        if (error) {
+          return { success: false, error: error.message };
+        }
+      } else {
+        // Create new holding
+        const { error } = await supabase
+          .from('user_portfolios')
+          .insert({
+            user_id: user.id,
+            token_id: token.id,
+            quantity: quantity.toString(),
+            average_cost: token.price.toString(),
+            total_cost: cost.toString(),
+            current_value: cost.toString(),
+          });
+
+        if (error) {
+          return { success: false, error: error.message };
+        }
+      }
+
+      // Record transaction
+      await supabase
+        .from('transactions')
+        .insert({
+          user_id: user.id,
+          type: 'trade_buy',
+          amount: cost.toString(),
+          token_symbol: token.symbol,
+          status: 'completed',
+        });
+
+      return { success: true };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Sell token (real trading)
+  async sellToken(walletAddress: string, tokenId: string, quantity: number): Promise<ApiResponse<void>> {
+    try {
+      const user = await getUserByWallet(walletAddress);
+      if (!user) {
+        return { success: false, error: 'User not found' };
+      }
+
+      // Get existing holding
+      const { data: holding, error: fetchError } = await supabase
+        .from('user_portfolios')
+        .select(`
+          *,
+          token:tokens(*)
+        `)
+        .eq('user_id', user.id)
+        .eq('token_id', tokenId)
+        .single();
+
+      if (fetchError || !holding) {
+        return { success: false, error: 'Token not found in portfolio' };
+      }
+
+      const currentQuantity = parseFloat(holding.quantity);
+      const sellQuantity = Math.min(quantity, currentQuantity);
+
+      if (sellQuantity <= 0) {
+        return { success: false, error: 'Invalid sell quantity' };
+      }
+
+      const proceeds = sellQuantity * parseFloat(holding.token.price);
+      const newQuantity = currentQuantity - sellQuantity;
+
+      if (newQuantity === 0) {
+        // Remove holding completely
+        const { error } = await supabase
+          .from('user_portfolios')
+          .delete()
+          .eq('id', holding.id);
+
+        if (error) {
+          return { success: false, error: error.message };
+        }
+      } else {
+        // Update holding
+        const newCost = newQuantity * parseFloat(holding.average_cost);
+
+        const { error } = await supabase
+          .from('user_portfolios')
+          .update({
+            quantity: newQuantity.toString(),
+            total_cost: newCost.toString(),
+            current_value: (newQuantity * parseFloat(holding.token.price)).toString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', holding.id);
+
+        if (error) {
+          return { success: false, error: error.message };
+        }
+      }
+
+      // Record transaction
+      await supabase
+        .from('transactions')
+        .insert({
+          user_id: user.id,
+          type: 'trade_sell',
+          amount: proceeds.toString(),
+          token_symbol: holding.token.symbol,
+          status: 'completed',
+        });
+
+      return { success: true };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  },
+};
+
+// TOKEN CREATION API
+export const tokenCreationApi = {
+  // Create token request
+  async createTokenRequest(requestData: {
+    creatorWalletAddress: string;
+    name: string;
+    symbol: string;
+    description?: string;
+    imageUrl?: string;
+    maxSupply?: number;
+    targetSupply?: number;
+    virtualLiquidity?: number;
+    curveExponent?: number;
+    mintLimitPerAddress?: number;
+  }): Promise<ApiResponse<TokenCreationRequest>> {
+    try {
+      const user = await createOrGetUser(requestData.creatorWalletAddress);
+
+      const { data, error } = await supabase
+        .from('token_creation_requests')
+        .insert({
+          creator_id: user.id,
+          name: requestData.name,
+          symbol: requestData.symbol,
+          description: requestData.description,
+          image_url: requestData.imageUrl,
+          max_supply: requestData.maxSupply?.toString(),
+          target_supply: requestData.targetSupply?.toString(),
+          virtual_liquidity: requestData.virtualLiquidity?.toString(),
+          curve_exponent: requestData.curveExponent || 2,
+          mint_limit_per_address: requestData.mintLimitPerAddress?.toString(),
+        })
+        .select()
+        .single();
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      return { success: true, data };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Create actual token in tokens table after blockchain creation
+  async createToken(tokenData: {
+    symbol: string;
+    name: string;
+    description?: string;
+    logoUrl?: string;
+    address: string;
+    decimals: number;
+    maxSupply?: number;
+    creatorWalletAddress: string;
+  }): Promise<ApiResponse<Token>> {
+    try {
+      const user = await createOrGetUser(tokenData.creatorWalletAddress);
+
+      const { data, error } = await supabase
+        .from('tokens')
+        .insert({
+          symbol: tokenData.symbol,
+          name: tokenData.name,
+          description: tokenData.description,
+          logo_url: tokenData.logoUrl,
+          address: tokenData.address,
+          decimals: tokenData.decimals,
+          max_supply: tokenData.maxSupply?.toString(),
+          creator_id: user.id,
+          is_active: true,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      return { success: true, data };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Get user's token creation requests
+  async getUserTokenRequests(walletAddress: string): Promise<ApiResponse<TokenCreationRequest[]>> {
+    try {
+      const user = await getUserByWallet(walletAddress);
+      if (!user) {
+        return { success: true, data: [] };
+      }
+
+      const { data, error } = await supabase
+        .from('token_creation_requests')
+        .select('*')
+        .eq('creator_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      return { success: true, data };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  },
+};
+
+// USER BALANCE API
+export const balanceApi = {
+  // Get user balance
+  async getUserBalance(walletAddress: string): Promise<ApiResponse<number>> {
+    try {
+      const user = await getUserByWallet(walletAddress);
+      if (!user) {
+        return { success: true, data: 0 };
+      }
+
+      return { success: true, data: user.balance };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Deposit funds
+  async depositFunds(walletAddress: string, amount: number): Promise<ApiResponse<void>> {
+    try {
+      const user = await createOrGetUser(walletAddress);
+
+      const { error } = await supabase
+        .from('users')
+        .update({
+          balance: (user.balance + amount).toString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id);
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      // Record transaction
+      await supabase
+        .from('transactions')
+        .insert({
+          user_id: user.id,
+          type: 'deposit',
+          amount: amount.toString(),
+          status: 'completed',
+        });
+
+      return { success: true };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Withdraw funds
+  async withdrawFunds(walletAddress: string, amount: number): Promise<ApiResponse<void>> {
+    try {
+      const user = await getUserByWallet(walletAddress);
+      if (!user) {
+        return { success: false, error: 'User not found' };
+      }
+
+
+      const { error } = await supabase
+        .from('users')
+        .update({
+          balance: (user.balance - amount).toString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id);
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      // Record transaction
+      await supabase
+        .from('transactions')
+        .insert({
+          user_id: user.id,
+          type: 'withdrawal',
+          amount: amount.toString(),
+          status: 'completed',
+        });
+
+      return { success: true };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Get user transactions
+  async getUserTransactions(walletAddress: string): Promise<ApiResponse<Transaction[]>> {
+    try {
+      const user = await getUserByWallet(walletAddress);
+      if (!user) {
+        return { success: true, data: [] };
+      }
+
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      return { success: true, data };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  },
+};
+
+// Users API
+const userApi = {
+  async getUserById(userId: string) {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      return { success: true, data };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  },
+
+  async getUserWalletAddress(userId: string) {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('wallet_address')
+        .eq('id', userId)
+        .single();
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      return { success: true, data: data.wallet_address };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  },
+};
+
+// Export all APIs
+export const supabaseApi = {
+  tokens: tokenApi,
+  quests: questApi,
+  watchlist: watchlistApi,
+  portfolio: portfolioApi,
+  tokenCreation: tokenCreationApi,
+  balance: balanceApi,
+  users: userApi,
+};

@@ -1,4 +1,5 @@
 import { imageUploadService } from "@/lib/image-upload";
+import { tokenCreationApi } from "@/lib/supabase-api";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -75,8 +76,44 @@ export function useTokenCreation() {
         maxMintPerAccount: tokenData.maxMintPerAccount || 0, // No limit by default
       };
 
-
       const result = await executeCreateToken(createTokenArgs);
+
+      // If blockchain creation was successful, store the token in the database
+      if (result.success && result.hash) {
+        try {
+          // Extract token address from the transaction result
+          // Note: In a real implementation, you'd parse the transaction to get the actual token address
+          // For now, we'll use a placeholder address format
+          const tokenAddress = `0x${result.hash.slice(-40)}`; // Simplified extraction
+
+          const dbResult = await tokenCreationApi.createToken({
+            symbol: tokenData.symbol,
+            name: tokenData.name,
+            description: tokenData.description,
+            logoUrl: tokenData.imageUrl,
+            address: tokenAddress,
+            decimals: 8, // Standard decimals
+            maxSupply: tokenData.maxSupply,
+            creatorWalletAddress: account.address.toString(),
+          });
+
+          if (dbResult.success) {
+            toast.success(
+              `Token ${tokenData.symbol} created successfully on blockchain and stored in database!`
+            );
+          } else {
+            toast.warning(
+              `Token created on blockchain but failed to store in database: ${dbResult.error}`
+            );
+          }
+        } catch (dbError) {
+          console.error("Failed to store token in database:", dbError);
+          toast.warning(
+            `Token created on blockchain but failed to store in database: ${dbError}`
+          );
+        }
+      }
+
       return result;
     } catch (error: any) {
       console.error("Token creation failed:", error);

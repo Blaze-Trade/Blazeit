@@ -2,7 +2,11 @@ import { TokenCard } from "@/components/trade/TokenCard";
 import { Button } from "@/components/ui/button";
 import { Toaster, toast } from "@/components/ui/sonner";
 import { useAptos } from "@/hooks/useAptos";
+import { useBlockchainTokens } from "@/hooks/useBlockchainTokens";
 import { useContractInteractions } from "@/hooks/useContractInteractions";
+import { useSupabasePortfolio } from "@/hooks/useSupabasePortfolio";
+import { useSupabaseTokens } from "@/hooks/useSupabaseTokens";
+import { useSupabaseWatchlist } from "@/hooks/useSupabaseWatchlist";
 import { api } from "@/lib/api-client";
 import {
   buyToken,
@@ -10,6 +14,7 @@ import {
   getTokenDecimals,
 } from "@/lib/token-trading";
 import { usePortfolioStore } from "@/stores/portfolioStore";
+import { MOCK_TOKENS } from "@shared/mock-data";
 import type { Token } from "@shared/types";
 import { ArrowUp, Heart, Loader2, Swords, Wallet, X } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
@@ -19,8 +24,7 @@ type SwipeDirection = "left" | "right" | "up";
 export function TradePage() {
   const [tokens, setTokens] = useState<Token[]>([]);
   const [initialTokens, setInitialTokens] = useState<Token[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+
   const {
     isConnected,
     address,
@@ -29,28 +33,54 @@ export function TradePage() {
     activeQuest,
     exitQuestMode,
   } = usePortfolioStore();
+
+  // Use blockchain tokens as primary source, Supabase as fallback
+  const {
+    tokens: blockchainTokens,
+    loading: blockchainLoading,
+    error: blockchainError,
+  } = useBlockchainTokens();
+  const {
+    tokens: supabaseTokens,
+    loading: supabaseLoading,
+    error: supabaseError,
+  } = useSupabaseTokens();
+  const { buyToken: buyTokenSupabase } = useSupabasePortfolio(address);
+  const { addToWatchlist: addToWatchlistSupabase } =
+    useSupabaseWatchlist(address);
   const { simulateTransaction } = useAptos();
   const { buyToken: buyTokenContract, isLoading: isContractLoading } =
     useContractInteractions();
   const isInQuestMode = activeQuest !== null;
+
+  // Update tokens when either source is loaded
   useEffect(() => {
-    const fetchTokens = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const data = await api<{ items: Token[] }>("/api/tokens");
-        setTokens(data.items);
-        setInitialTokens(data.items);
-      } catch (err) {
-        setError("Failed to fetch tokens. Please try again later.");
-        toast.error("Failed to fetch tokens.");
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchTokens();
-  }, []);
+    let tokensToUse: Token[] = [];
+
+    if (blockchainTokens.length > 0) {
+      tokensToUse = blockchainTokens;
+    } else if (supabaseTokens.length > 0) {
+      tokensToUse = supabaseTokens;
+    } else if (
+      !blockchainLoading &&
+      !supabaseLoading &&
+      blockchainTokens.length === 0 &&
+      supabaseTokens.length === 0
+    ) {
+      // Fallback to mock tokens if no tokens are available from any source
+      console.log(
+        "No tokens found from blockchain or Supabase, using mock tokens as fallback"
+      );
+      tokensToUse = MOCK_TOKENS;
+    }
+
+    if (tokensToUse.length > 0) {
+      // Shuffle tokens for variety
+      const shuffledTokens = [...tokensToUse].sort(() => Math.random() - 0.5);
+      setTokens(shuffledTokens);
+      setInitialTokens(shuffledTokens);
+    }
+  }, [blockchainTokens, supabaseTokens, blockchainLoading, supabaseLoading]);
   const childRefs = useMemo(
     () =>
       Array(initialTokens.length)
@@ -120,20 +150,23 @@ export function TradePage() {
       // Add to local store
       addToWatchlist(token);
 
-      // Also add to backend if connected
+      // Also add to Supabase if connected
       if (address) {
         try {
-          await api(`/api/watchlist/${address}/add`, {
-            method: "POST",
-            body: JSON.stringify({ tokenId: token.id }),
-          });
+          const result = await addToWatchlistSupabase(token);
+          if (result.success) {
+            toast.success(`Added ${token.symbol} to watchlist`);
+          } else {
+            console.error("Failed to add to watchlist:", result.error);
+            toast.error("Failed to add to watchlist");
+          }
         } catch (error) {
-          console.error("Failed to sync watchlist to backend:", error);
-          // Don't show error to user as local storage still works
+          console.error("Failed to add to watchlist:", error);
+          toast.error("Failed to add to watchlist");
         }
+      } else {
+        toast.info(`${token.symbol} added to watchlist`);
       }
-
-      toast.info(`${token.symbol} added to watchlist`);
     }
   };
   const outOfFrame = (name: string) => {
@@ -150,21 +183,28 @@ export function TradePage() {
     }
   };
   const renderContent = () => {
-    if (loading) {
+    if (blockchainLoading || supabaseLoading) {
       return (
         <div className="w-full h-full flex flex-col items-center justify-center bg-blaze-white border-2 border-blaze-black p-6 text-center">
           <Loader2 className="w-16 h-16 animate-spin" />
-          <p className="font-mono text-lg mt-4">Loading Tokens...</p>
+          <p className="font-mono text-lg mt-4">
+            Loading Tokens from Blockchain...
+          </p>
         </div>
       );
     }
-    if (error) {
+    if (blockchainError || supabaseError) {
       return (
         <div className="w-full h-full flex flex-col items-center justify-center bg-blaze-white border-2 border-blaze-black p-6 text-center">
           <h2 className="font-display text-4xl font-bold text-red-600">
-            ERROR
+            BLOCKCHAIN ERROR
           </h2>
-          <p className="font-mono text-lg mt-2">{error}</p>
+          <p className="font-mono text-lg mt-2">
+            Failed to fetch tokens from blockchain
+          </p>
+          <p className="font-mono text-sm mt-2 text-gray-600">
+            {blockchainError || supabaseError}
+          </p>
         </div>
       );
     }
@@ -188,6 +228,13 @@ export function TradePage() {
           <p className="font-mono text-lg mt-2">
             Check back later for more tokens.
           </p>
+          {blockchainTokens.length === 0 &&
+            !blockchainLoading &&
+            !supabaseLoading && (
+              <p className="font-mono text-sm mt-2 text-gray-600">
+                Using demo tokens (no blockchain tokens found)
+              </p>
+            )}
         </div>
       );
     }
@@ -236,7 +283,11 @@ export function TradePage() {
         <Button
           onClick={() => swipe("left")}
           disabled={
-            tokens.length === 0 || loading || !isConnected || isContractLoading
+            tokens.length === 0 ||
+            blockchainLoading ||
+            supabaseLoading ||
+            !isConnected ||
+            isContractLoading
           }
           className="h-20 w-20 rounded-full border-2 border-blaze-black bg-blaze-white text-blaze-black hover:bg-blaze-black/10 active:bg-blaze-black/20 disabled:opacity-50"
         >
@@ -245,7 +296,11 @@ export function TradePage() {
         <Button
           onClick={() => swipe("up")}
           disabled={
-            tokens.length === 0 || loading || !isConnected || isContractLoading
+            tokens.length === 0 ||
+            blockchainLoading ||
+            supabaseLoading ||
+            !isConnected ||
+            isContractLoading
           }
           className="h-20 w-20 rounded-full border-2 border-blaze-black bg-blaze-white text-blaze-black hover:bg-blaze-black/10 active:bg-blaze-black/20 disabled:opacity-50"
         >
@@ -254,7 +309,11 @@ export function TradePage() {
         <Button
           onClick={() => swipe("right")}
           disabled={
-            tokens.length === 0 || loading || !isConnected || isContractLoading
+            tokens.length === 0 ||
+            blockchainLoading ||
+            supabaseLoading ||
+            !isConnected ||
+            isContractLoading
           }
           className="h-20 w-20 rounded-full border-2 border-blaze-orange bg-blaze-orange text-blaze-black hover:bg-blaze-orange/80 active:bg-blaze-orange/90 disabled:opacity-50"
         >
