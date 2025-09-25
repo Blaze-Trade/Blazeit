@@ -59,11 +59,16 @@ export function useTokenCreation() {
   };
 
   const uploadImage = async (file: File): Promise<string | null> => {
-    const result = await imageUploadService.uploadImage(file);
-    if (result.success && result.url) {
-      return result.url;
+    try {
+      const result = await imageUploadService.uploadImage(file);
+      if (result.success && result.url) {
+        return result.url;
+      }
+      throw new Error(result.error || 'Failed to upload image');
+    } catch (error) {
+      console.error('Image upload error in hook:', error);
+      throw error;
     }
-    throw new Error(result.error || 'Failed to upload image');
   };
 
   return {

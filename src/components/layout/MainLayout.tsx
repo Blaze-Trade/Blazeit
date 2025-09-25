@@ -14,7 +14,7 @@ const navItems = [
 ];
 
 export function MainLayout() {
-
+  const navigate = useNavigate();
   const { isConnected, theme, setTheme } = usePortfolioStore();
 
   // Apply theme to document

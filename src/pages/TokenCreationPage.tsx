@@ -18,6 +18,7 @@ export function TokenCreationPage() {
   const { isConnected } = usePortfolioStore();
   const { createToken, uploadImage, isCreating } = useTokenCreation();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -44,6 +45,21 @@ export function TokenCreationPage() {
 
   const quality = calculateQuality();
 
+  // Debug button state
+  console.log('Button disabled state:', {
+    connected,
+    account: account?.address,
+    isCreating,
+    quality,
+    disabled: !connected || isCreating || quality < 100
+  });
+  
+  console.log('Wallet state:', {
+    connected,
+    account: account?.address,
+    isConnected: isConnected
+  });
+
   // Creation fee in APT (example value)
   const creationFee = 0.0000000000000001;
 
@@ -66,6 +82,7 @@ export function TokenCreationPage() {
       }
       
       // Upload image to R2
+      setIsUploadingImage(true);
       try {
         const toastId = toast.loading("Uploading image...");
         const imageUrl = await uploadImage(file);
@@ -74,6 +91,8 @@ export function TokenCreationPage() {
       } catch (error) {
         toast.error("Failed to upload image. Please try again.");
         console.error("Image upload error:", error);
+      } finally {
+        setIsUploadingImage(false);
       }
     }
   };
@@ -211,8 +230,10 @@ export function TokenCreationPage() {
                 Token Image
               </Label>
               <div
-                onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-blaze-black bg-blaze-white hover:bg-blaze-orange/20 transition-colors cursor-pointer p-8 text-center rounded-none"
+                onClick={() => !isUploadingImage && fileInputRef.current?.click()}
+                className={`border-2 border-dashed border-blaze-black bg-blaze-white hover:bg-blaze-orange/20 transition-colors p-8 text-center rounded-none ${
+                  isUploadingImage ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+                }`}
               >
                 <input
                   ref={fileInputRef}
@@ -220,15 +241,27 @@ export function TokenCreationPage() {
                   accept="image/png,image/jpeg,image/jpg"
                   onChange={handleImageUpload}
                   className="hidden"
+                  disabled={isUploadingImage}
                 />
                 <Upload className="w-12 h-12 mx-auto mb-4 text-blaze-black" />
                 <p className="text-blaze-black font-mono text-lg mb-2">
-                  Drop image or click to browse
+                  {isUploadingImage ? 'Uploading...' : 'Drop image or click to browse'}
                 </p>
                 <p className="text-blaze-black/70 font-mono text-sm">
                   PNG, JPG up to 10MB
                 </p>
-                {formData.image && (
+                {isUploadingImage && (
+                  <div className="mt-4">
+                    <div className="w-full bg-blaze-orange/20 rounded-none border-2 border-blaze-black">
+                      <div className="h-2 bg-blaze-orange animate-pulse"></div>
+                    </div>
+                    <p className="text-blaze-black font-mono text-sm mt-2">
+                      Uploading image...
+                    </p>
+                  </div>
+                )}
+                
+                {formData.image && !isUploadingImage && (
                   <div className="mt-4">
                     <p className="text-blaze-black font-mono text-sm mb-2">
                       Selected: {formData.image.name}
@@ -279,9 +312,14 @@ export function TokenCreationPage() {
             </Button>
 
             {!connected && (
-              <p className="text-center text-blaze-black/70 font-mono">
-                Please connect your wallet to create a token
-              </p>
+              <div className="text-center text-blaze-black/70 font-mono space-y-2">
+                <p>Please connect your wallet to create a token</p>
+                <div className="text-sm">
+                  <p>Debug: connected={connected ? 'true' : 'false'}</p>
+                  <p>account={account ? 'present' : 'null'}</p>
+                  <p>quality={quality}%</p>
+                </div>
+              </div>
             )}
           </CardContent>
         </Card>

@@ -32,6 +32,7 @@ export class ImageUploadService {
         body: formData,
       });
 
+
       if (!response.ok) {
         let errorMessage = 'Upload failed';
         try {
@@ -46,8 +47,10 @@ export class ImageUploadService {
 
       let result;
       try {
-        result = await response.json();
+        const responseText = await response.text();
+        result = JSON.parse(responseText);
       } catch (jsonError) {
+        console.error('JSON parsing failed:', jsonError);
         // If JSON parsing fails, create a mock response for development
         console.warn('JSON parsing failed, using mock response for development');
         result = {
@@ -58,9 +61,14 @@ export class ImageUploadService {
         };
       }
       
+      const imageUrl = result.data?.url || result.url;
+      if (!imageUrl) {
+        throw new Error('No image URL returned from server');
+      }
+      
       return {
         success: true,
-        url: result.url,
+        url: imageUrl,
       };
     } catch (error) {
       console.error('Image upload error:', error);
