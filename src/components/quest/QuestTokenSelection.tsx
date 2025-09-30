@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { useAptos } from '@/hooks/useAptos';
+import { useBlockchainTokens } from '@/hooks/useBlockchainTokens';
 import { useSupabasePortfolio } from "@/hooks/useSupabasePortfolio";
 import { useSupabaseQuests } from "@/hooks/useSupabaseQuests";
 import { useSupabaseTokens } from "@/hooks/useSupabaseTokens";
@@ -35,10 +36,19 @@ export function QuestTokenSelection({
   const { joinQuest: joinQuestSupabase } = useSupabaseQuests();
   const { buyToken: buyTokenSupabase } = useSupabasePortfolio(address);
   const {
-    tokens,
-    loading: tokensLoading,
-    error: tokensError,
+    tokens: supabaseTokens,
+    loading: supabaseLoading,
+    error: supabaseError,
   } = useSupabaseTokens();
+  const {
+    tokens: blockchainTokens,
+    loading: blockchainLoading,
+    error: blockchainError,
+  } = useBlockchainTokens();
+
+  const tokens = (blockchainTokens.length > 0 ? blockchainTokens : supabaseTokens);
+  const tokensLoading = blockchainLoading || supabaseLoading;
+  const tokensError = blockchainError || supabaseError;
 
   const [selectedTokens, setSelectedTokens] = useState<TokenSelection[]>([]);
   const [confirming, setConfirming] = useState(false);

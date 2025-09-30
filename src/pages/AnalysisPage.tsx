@@ -9,6 +9,8 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Input } from "@/components/ui/input";
+import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -59,6 +61,7 @@ export function AnalysisPage() {
     refetch: refetchBlockchain,
   } = useBlockchainPortfolio();
   const [sellCandidate, setSellCandidate] = useState<Holding | null>(null);
+  const [sellAmount, setSellAmount] = useState<number>(0);
   const [showValues, setShowValues] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [dataSource, setDataSource] = useState<
@@ -161,15 +164,21 @@ export function AnalysisPage() {
   }, [dataSource, blockchainHoldings, supabaseHoldings]);
   const handleSell = async () => {
     if (sellCandidate) {
+      const quantityToSell = Math.max(0, Math.min(sellCandidate.quantity, sellAmount || 0));
+      if (quantityToSell <= 0) {
+        toast.error("Enter a valid amount to sell");
+        return;
+      }
       const result = await sellTokenSupabase(
         sellCandidate.id,
-        sellCandidate.quantity
+        quantityToSell
       );
       if (result.success) {
         toast.success(
-          `Sold ${sellCandidate.quantity.toFixed(2)} ${sellCandidate.symbol}`
+          `Sold ${quantityToSell.toFixed(2)} ${sellCandidate.symbol}`
         );
-      setSellCandidate(null);
+        setSellCandidate(null);
+        setSellAmount(0);
       } else {
         toast.error(result.error || "Failed to sell token");
       }
@@ -726,10 +735,48 @@ export function AnalysisPage() {
                 <AlertDialogTitle className="font-display text-4xl">
                   Confirm Sale
                 </AlertDialogTitle>
-                <AlertDialogDescription className="font-mono text-lg">
-                  Are you sure you want to sell all{" "}
-                  {sellCandidate?.quantity.toFixed(4)} {sellCandidate?.symbol}{" "}
-                  for an estimated ${formatValue(sellCandidate?.value || 0)}?
+                <AlertDialogDescription className="font-mono text-lg space-y-3">
+                  <div>
+                    <p className="mb-1">Select amount to sell</p>
+                    {sellCandidate && (
+                      <div className="space-y-2">
+                        <div className="px-1">
+                          <Slider
+                            value={[sellAmount || 0]}
+                            min={0}
+                            max={sellCandidate.quantity}
+                            step={sellCandidate.quantity / 100 || 0.0001}
+                            onValueChange={(v) => setSellAmount(Number(v[0]))}
+                          />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="number"
+                            step="0.0001"
+                            min="0"
+                            max={sellCandidate.quantity}
+                            value={sellAmount}
+                            onChange={(e) =>
+                              setSellAmount(
+                                Math.min(
+                                  sellCandidate.quantity,
+                                  Math.max(0, parseFloat(e.target.value) || 0)
+                                )
+                              )
+                            }
+                            className="rounded-none border-2 border-blaze-black w-36"
+                          />
+                          <span className="text-sm text-blaze-black/70">
+                            Max: {sellCandidate.quantity.toFixed(4)} {sellCandidate.symbol}
+                          </span>
+                        </div>
+                        <div className="text-sm text-blaze-black/70">
+                          Est. proceeds: $
+                          {formatValue((sellAmount || 0) * (sellCandidate.value / sellCandidate.quantity))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>

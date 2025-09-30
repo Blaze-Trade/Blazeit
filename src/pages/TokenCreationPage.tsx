@@ -2,7 +2,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import { useTokenCreation } from "@/hooks/useTokenCreation";
 import { usePortfolioStore } from "@/stores/portfolioStore";
@@ -39,17 +38,7 @@ export function TokenCreationPage() {
   const symbolMaxLength = 6;
   const descriptionMaxLength = 500;
 
-  // Calculate quality percentage based on form completion
-  const calculateQuality = () => {
-    let score = 0;
-    if (formData.symbol.length >= 2) score += 25;
-    if (formData.name.length >= 3) score += 25;
-    if (formData.description.length >= 10) score += 25;
-    if (formData.imageUrl) score += 25;
-    return score;
-  };
-
-  const quality = calculateQuality();
+  // Removed quality calculation and gating
 
   // Creation fee in APT (example value)
   const creationFee = 0.0000000000000001;
@@ -368,18 +357,7 @@ export function TokenCreationPage() {
               />
             </div>
 
-            {/* Quality Progress */}
-            <div className="space-y-2">
-              <Label className="text-lg font-bold text-blaze-black">
-                Quality:
-              </Label>
-              <div className="space-y-2">
-                <Progress value={quality} className="h-3 bg-blaze-black/20" />
-                <div className="text-sm text-blaze-black/70 font-mono">
-                  {quality}%
-                </div>
-              </div>
-            </div>
+            {/* Quality section removed */}
 
             {/* Creation Fee */}
             <div className="space-y-2">
@@ -496,7 +474,7 @@ export function TokenCreationPage() {
             {/* Create Button */}
             <Button
               onClick={handleCreateToken}
-              disabled={!connected || isCreating || quality < 100}
+              disabled={!connected || isCreating}
               className="w-full h-14 rounded-none border-2 border-blaze-black bg-blaze-orange text-blaze-black text-xl font-bold uppercase tracking-wider hover:bg-blaze-black hover:text-blaze-white active:translate-y-px active:translate-x-px disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
             >
               {isCreating ? "Creating..." : "Create Coin"}

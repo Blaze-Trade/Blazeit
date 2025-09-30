@@ -1,5 +1,8 @@
 import { TokenCard } from "@/components/trade/TokenCard";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Slider } from "@/components/ui/slider";
+import { Input } from "@/components/ui/input";
 import { Toaster, toast } from "@/components/ui/sonner";
 import { useAptos } from "@/hooks/useAptos";
 import { useBlockchainTokens } from "@/hooks/useBlockchainTokens";
@@ -20,6 +23,9 @@ type SwipeDirection = "left" | "right" | "up";
 export function TradePage() {
   const [tokens, setTokens] = useState<Token[]>([]);
   const [initialTokens, setInitialTokens] = useState<Token[]>([]);
+  const [showBuyDialog, setShowBuyDialog] = useState(false);
+  const [pendingBuyToken, setPendingBuyToken] = useState<Token | null>(null);
+  const [buyQuantity, setBuyQuantity] = useState<number>(1);
 
   const {
     isConnected,
@@ -99,71 +105,10 @@ export function TradePage() {
     }
 
     if (direction === "right") {
-      if (isInQuestMode && activeQuest) {
-        try {
-          await simulateTransaction(`Buying 1 ${token.symbol}`);
-          await api(`/api/quests/${activeQuest.id}/buy`, {
-            method: "POST",
-            body: JSON.stringify({ userId: address, token, quantity: 1 }),
-          });
-          toast.success(`Added 1 ${token.symbol} to Quest Portfolio`);
-        } catch (error) {
-          restoreCard(token.id);
-        }
-      } else {
-        // Real token purchase using CONTRACT_FUNCTIONS.launchpad.buyToken
-        try {
-          // Create transaction payload for buying token
-          const payload = {
-            data: createTransactionPayload(
-              CONTRACT_FUNCTIONS.launchpad.buyToken,
-              [], // No type arguments
-              [
-                "0x3d4b170229fcef725b913cdb9a4bfbddcdea07b9b1b1b230ca19f5367a0c7df8",
-                1000000,
-              ]
-            ),
-          };
-
-          const toastId = toast.loading(`Buying ${token.symbol}...`, {
-            description: "Please approve the transaction in your wallet.",
-          });
-
-          // Submit transaction to blockchain
-          const result = await signAndSubmitTransaction(payload);
-
-          if (result && result.hash) {
-            toast.success(`Successfully bought ${token.symbol}!`, {
-              id: toastId,
-              description: `Transaction: ${result.hash.slice(0, 10)}...`,
-            });
-
-            // Update local store
-            buyTokenStore(token, 1);
-          } else {
-            toast.error(`Failed to buy ${token.symbol}`, { id: toastId });
-            toast.dismiss(toastId);
-            restoreCard(token.id);
-          }
-        } catch (error: any) {
-          const isUserRejection =
-            error?.message?.includes("User rejected") ||
-            error?.message?.includes("rejected");
-
-          console.error("Token purchase failed:", error);
-          toast.error(
-            isUserRejection
-              ? "Transaction rejected"
-              : `Failed to buy ${token.symbol}`,
-            {
-              description: isUserRejection
-                ? "You cancelled the transaction."
-                : error?.message || "Please try again.",
-            }
-          );
-          restoreCard(token.id);
-        }
-      }
+      // Open quantity selector dialog instead of immediately buying
+      setPendingBuyToken(token);
+      setBuyQuantity(1);
+      setShowBuyDialog(true);
     } else if (direction === "up") {
       // Add to local store
       addToWatchlist(token);
@@ -275,6 +220,120 @@ export function TradePage() {
   return (
     <div className="w-full h-full flex flex-col items-center justify-center relative p-4">
       <Toaster richColors closeButton />
+      <Dialog open={showBuyDialog} onOpenChange={setShowBuyDialog}>
+        <DialogContent className="rounded-none border-2 border-blaze-black bg-blaze-white">
+          <DialogHeader>
+            <DialogTitle className="font-display text-3xl">
+              Buy {pendingBuyToken?.symbol}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <p className="font-mono text-sm text-blaze-black/70">Quantity</p>
+              <div className="px-1">
+                <Slider
+                  value={[buyQuantity]}
+                  min={0.01}
+                  max={100}
+                  step={0.01}
+                  onValueChange={(v) => setBuyQuantity(Number(v[0]))}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  value={buyQuantity}
+                  onChange={(e) => setBuyQuantity(Math.max(0.01, parseFloat(e.target.value) || 0.01))}
+                  className="rounded-none border-2 border-blaze-black w-32"
+                />
+                {pendingBuyToken && (
+                  <span className="font-mono text-sm text-blaze-black/70">
+                    ≈ ${(buyQuantity * pendingBuyToken.price).toFixed(2)}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              className="rounded-none border-2 border-blaze-black"
+              onClick={() => {
+                setShowBuyDialog(false);
+                if (pendingBuyToken) restoreCard(pendingBuyToken.id);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="rounded-none border-2 border-blaze-black bg-blaze-orange text-blaze-black"
+              onClick={async () => {
+                if (!pendingBuyToken) return;
+                const token = pendingBuyToken;
+                const quantity = buyQuantity;
+                setShowBuyDialog(false);
+                try {
+                  if (isInQuestMode && activeQuest) {
+                    await simulateTransaction(`Buying ${quantity} ${token.symbol}`);
+                    await api(`/api/quests/${activeQuest.id}/buy`, {
+                      method: "POST",
+                      body: JSON.stringify({ userId: address, token, quantity }),
+                    });
+                    toast.success(`Added ${quantity} ${token.symbol} to Quest Portfolio`);
+                  } else {
+                    // Build payload using quantity; placeholder arguments preserved
+                    const payload = {
+                      data: createTransactionPayload(
+                        CONTRACT_FUNCTIONS.launchpad.buyToken,
+                        [],
+                        [
+                          "0x3d4b170229fcef725b913cdb9a4bfbddcdea07b9b1b1b230ca19f5367a0c7df8",
+                          Math.round(1000000 * quantity),
+                        ]
+                      ),
+                    };
+                    const toastId = toast.loading(`Buying ${quantity} ${token.symbol}...`, {
+                      description: "Please approve the transaction in your wallet.",
+                    });
+                    const result = await signAndSubmitTransaction(payload);
+                    if (result && result.hash) {
+                      toast.success(`Successfully bought ${quantity} ${token.symbol}!`, {
+                        id: toastId,
+                        description: `Transaction: ${result.hash.slice(0, 10)}...`,
+                      });
+                      buyTokenStore(token, quantity);
+                    } else {
+                      toast.error(`Failed to buy ${token.symbol}`, { id: toastId });
+                      toast.dismiss(toastId);
+                      restoreCard(token.id);
+                    }
+                  }
+                } catch (error: any) {
+                  const isUserRejection =
+                    error?.message?.includes("User rejected") ||
+                    error?.message?.includes("rejected");
+                  console.error("Token purchase failed:", error);
+                  toast.error(
+                    isUserRejection ? "Transaction rejected" : `Failed to buy ${token.symbol}`,
+                    {
+                      description: isUserRejection
+                        ? "You cancelled the transaction."
+                        : error?.message || "Please try again.",
+                    }
+                  );
+                  restoreCard(token.id);
+                } finally {
+                  setPendingBuyToken(null);
+                }
+              }}
+            >
+              Confirm Buy
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {isInQuestMode && activeQuest && (
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-blaze-orange border-b-2 border-blaze-black p-2 text-center font-mono font-bold z-10 flex items-center justify-between">
           <Link
