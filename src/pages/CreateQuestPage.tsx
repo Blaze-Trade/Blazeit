@@ -3,10 +3,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import { api } from "@/lib/api-client";
-import { usePortfolioStore } from "@/stores/portfolioStore";
-import { useSupabaseQuests } from "@/hooks/useSupabaseQuests";
 import { useQuestManagement } from "@/hooks/useQuestManagement";
+import { useQuestStaking } from "@/hooks/useQuestStaking";
+import { useSupabaseQuests } from "@/hooks/useSupabaseQuests";
+import { usePortfolioStore } from "@/stores/portfolioStore";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Calculator, Calendar, Clock, Info, Wallet } from "lucide-react";
 import { useMemo } from "react";
@@ -18,43 +18,51 @@ import { z } from "zod";
 // Helper function to format datetime for input
 const formatDateTimeLocal = (date: Date): string => {
   const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
   return `${year}-${month}-${day}T${hours}:${minutes}`;
 };
 
 // Helper function to calculate duration in hours
 const calculateDurationHours = (startTime: Date, endTime: Date): number => {
-  return Math.ceil((endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60));
+  // Calculate total minutes first for better precision
+  const totalMinutes = (endTime.getTime() - startTime.getTime()) / (1000 * 60);
+  const hours = totalMinutes / 60;
+
+  // Round to 2 decimal places for accuracy
+  return Math.round(hours * 100) / 100;
 };
 
-const questSchema = z.object({
-  name: z.string().min(5, "Name must be at least 5 characters").max(100, "Name must be less than 100 characters"),
-  entryFee: z.number().min(1, "Entry fee must be at least $1").max(1000, "Entry fee cannot exceed $1000"),
-  startTime: z.string().refine((val) => {
-    const startDate = new Date(val);
-    const now = new Date();
-    return startDate > now;
-  }, "Start time must be in the future"),
-  endTime: z.string(),
-}).refine((data) => {
-  const startDate = new Date(data.startTime);
-  const endDate = new Date(data.endTime);
-  return endDate > startDate;
-}, {
-  message: "End time must be after start time",
-  path: ["endTime"],
-}).refine((data) => {
-  const startDate = new Date(data.startTime);
-  const endDate = new Date(data.endTime);
-  const durationHours = calculateDurationHours(startDate, endDate);
-  return durationHours >= 1 && durationHours <= 720;
-}, {
-  message: "Quest duration must be between 1 hour and 30 days",
-  path: ["endTime"],
-});
+const questSchema = z
+  .object({
+    name: z
+      .string()
+      .min(5, "Name must be at least 5 characters")
+      .max(100, "Name must be less than 100 characters"),
+    entryFee: z
+      .number()
+      .min(1, "Entry fee must be at least $1")
+      .max(1000, "Entry fee cannot exceed $1000"),
+    startTime: z.string().refine((val) => {
+      const startDate = new Date(val);
+      const now = new Date();
+      return startDate > now;
+    }, "Start time must be in the future"),
+    endTime: z.string(),
+  })
+  .refine(
+    (data) => {
+      const startDate = new Date(data.startTime);
+      const endDate = new Date(data.endTime);
+      return endDate > startDate;
+    },
+    {
+      message: "End time must be after start time",
+      path: ["endTime"],
+    }
+  );
 
 type QuestFormValues = z.infer<typeof questSchema>;
 
@@ -63,6 +71,8 @@ export function CreateQuestPage() {
   const { isConnected, address } = usePortfolioStore();
   const { createQuest: createQuestSupabase } = useSupabaseQuests();
   const { createQuest, isCreating } = useQuestManagement();
+  const { createQuest: createQuestBlockchain, isLoading: isBlockchainLoading } =
+    useQuestStaking();
 
   // Set default times: start in 1 hour, end in 1 week
   const defaultStartTime = new Date(Date.now() + 60 * 60 * 1000); // 1 hour from now
@@ -98,20 +108,30 @@ export function CreateQuestPage() {
 
   const formatDuration = (hours: number): string => {
     if (hours <= 0) return "Invalid duration";
-    if (hours < 24) {
-      return `${hours} Hour${hours !== 1 ? 's' : ''}`;
+    if (hours < 1) {
+      // Less than 1 hour - show in minutes
+      const minutes = Math.round(hours * 60);
+      return `${minutes} Minute${minutes !== 1 ? "s" : ""}`;
+    } else if (hours < 24) {
+      // Less than 24 hours - show hours and minutes
+      const wholeHours = Math.floor(hours);
+      const minutes = Math.round((hours - wholeHours) * 60);
+      if (minutes === 0) {
+        return `${wholeHours} Hour${wholeHours !== 1 ? "s" : ""}`;
+      }
+      return `${wholeHours}h ${minutes}m`;
     } else if (hours < 168) {
       const days = Math.floor(hours / 24);
-      const remainingHours = hours % 24;
+      const remainingHours = Math.round(hours % 24);
       if (remainingHours === 0) {
-        return `${days} Day${days !== 1 ? 's' : ''}`;
+        return `${days} Day${days !== 1 ? "s" : ""}`;
       }
       return `${days}d ${remainingHours}h`;
     } else {
       const weeks = Math.floor(hours / 168);
-      const remainingHours = hours % 168;
+      const remainingHours = Math.round(hours % 168);
       if (remainingHours === 0) {
-        return `${weeks} Week${weeks !== 1 ? 's' : ''}`;
+        return `${weeks} Week${weeks !== 1 ? "s" : ""}`;
       }
       const days = Math.floor(remainingHours / 24);
       return `${weeks}w ${days}d`;
@@ -121,14 +141,14 @@ export function CreateQuestPage() {
   const formatDateTime = (dateTimeString: string): string => {
     if (!dateTimeString) return "Not set";
     const date = new Date(dateTimeString);
-    return date.toLocaleString('en-US', {
-      weekday: 'short',
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      timeZoneName: 'short'
+    return date.toLocaleString("en-US", {
+      weekday: "short",
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZoneName: "short",
     });
   };
 
@@ -141,10 +161,35 @@ export function CreateQuestPage() {
     try {
       const startDate = new Date(values.startTime);
       const endDate = new Date(values.endTime);
+      const now = new Date();
 
-      const result = await createQuestSupabase({
+      // Calculate hours from now until start/end times
+      const buyInHours =
+        (startDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+      const resultHours =
+        (endDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+
+      // Step 1: Create quest on blockchain
+      const blockchainResult = await createQuestBlockchain({
         name: values.name,
-        description: `A trading quest with ${formatDuration(calculatedDuration)} duration`,
+        entryFeeAPT: values.entryFee,
+        buyInHours,
+        resultHours,
+      });
+
+      if (!blockchainResult.success) {
+        toast.error(
+          "Failed to create quest on blockchain. Transaction cancelled."
+        );
+        return;
+      }
+
+      // Step 2: Store quest in Supabase database
+      const supabaseResult = await createQuestSupabase({
+        name: values.name,
+        description: `A trading quest with ${formatDuration(
+          calculatedDuration
+        )} duration`,
         entryFee: values.entryFee,
         prizePool: calculatedPrizePool,
         durationHours: calculatedDuration,
@@ -154,11 +199,15 @@ export function CreateQuestPage() {
         creatorWalletAddress: address,
       });
 
-      if (result.success) {
-        toast.success("Quest created successfully!");
+      if (supabaseResult.success) {
+        toast.success("Quest created successfully on blockchain and database!");
         navigate("/quests");
       } else {
-        toast.error(result.error || "Failed to create quest. Please try again.");
+        toast.warning(
+          "Quest created on blockchain but failed to save to database. Transaction: " +
+            blockchainResult.hash?.slice(0, 10)
+        );
+        console.error("Supabase error:", supabaseResult.error);
       }
     } catch (error) {
       toast.error("Failed to create quest. Please try again.");
@@ -171,7 +220,9 @@ export function CreateQuestPage() {
       <div className="p-4 md:p-8 h-full flex flex-col items-center justify-center text-center">
         <Wallet className="w-24 h-24 text-blaze-black/50" />
         <h1 className="font-display text-5xl font-bold mt-4">CONNECT WALLET</h1>
-        <p className="font-mono text-lg mt-2 max-w-md">You must connect your wallet to create a new quest.</p>
+        <p className="font-mono text-lg mt-2 max-w-md">
+          You must connect your wallet to create a new quest.
+        </p>
       </div>
     );
   }
@@ -179,14 +230,19 @@ export function CreateQuestPage() {
   return (
     <div className="p-4 md:p-8">
       <div className="max-w-6xl mx-auto space-y-8">
-        <h1 className="font-display text-6xl md:text-8xl font-bold text-blaze-black">CREATE QUEST</h1>
+        <h1 className="font-display text-6xl md:text-8xl font-bold text-blaze-black">
+          CREATE QUEST
+        </h1>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Form */}
           <div className="space-y-8">
             <div className="border-2 border-blaze-black bg-blaze-white p-8 shadow-blaze-shadow">
               <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 font-mono">
+                <form
+                  onSubmit={form.handleSubmit(onSubmit)}
+                  className="space-y-8 font-mono"
+                >
                   <FormField
                     control={form.control}
                     name="name"
@@ -203,7 +259,8 @@ export function CreateQuestPage() {
                           />
                         </FormControl>
                         <FormDescription className="text-sm text-blaze-black/70 font-mono">
-                          Choose a name that attracts participants (5-100 characters)
+                          Choose a name that attracts participants (5-100
+                          characters)
                         </FormDescription>
                         <FormMessage className="text-red-600 font-mono font-bold" />
                       </FormItem>
@@ -226,11 +283,14 @@ export function CreateQuestPage() {
                             max="1000"
                             step="1"
                             {...field}
-                            onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                            onChange={(e) =>
+                              field.onChange(parseInt(e.target.value) || 0)
+                            }
                           />
                         </FormControl>
                         <FormDescription className="text-sm text-blaze-black/70 font-mono">
-                          Higher entry fees typically attract more serious participants ($1-$1000)
+                          Higher entry fees typically attract more serious
+                          participants ($1-$1000)
                         </FormDescription>
                         <FormMessage className="text-red-600 font-mono font-bold" />
                       </FormItem>
@@ -279,7 +339,8 @@ export function CreateQuestPage() {
                             />
                           </FormControl>
                           <FormDescription className="text-sm text-blaze-black/70 font-mono">
-                            When the quest will end and winners will be determined
+                            When the quest will end and winners will be
+                            determined
                           </FormDescription>
                           <FormMessage className="text-red-600 font-mono font-bold" />
                         </FormItem>
@@ -289,10 +350,19 @@ export function CreateQuestPage() {
 
                   <Button
                     type="submit"
-                    disabled={form.formState.isSubmitting || isCreating || calculatedDuration <= 0}
+                    disabled={
+                      form.formState.isSubmitting ||
+                      isCreating ||
+                      isBlockchainLoading ||
+                      calculatedDuration <= 0
+                    }
                     className="w-full h-16 rounded-none border-2 border-blaze-black bg-blaze-orange text-blaze-black text-xl font-bold uppercase tracking-wider hover:bg-blaze-black hover:text-blaze-white active:translate-y-px active:translate-x-px disabled:opacity-50 disabled:cursor-not-allowed font-mono shadow-blaze-shadow"
                   >
-                    {form.formState.isSubmitting || isCreating ? "Creating Quest..." : "Create Quest"}
+                    {form.formState.isSubmitting ||
+                    isCreating ||
+                    isBlockchainLoading
+                      ? "Creating Quest..."
+                      : "Create Quest"}
                   </Button>
                 </form>
               </Form>
@@ -310,7 +380,9 @@ export function CreateQuestPage() {
               </CardHeader>
               <CardContent className="p-6 space-y-6 font-mono bg-blaze-white">
                 <div className="space-y-2">
-                  <p className="text-sm uppercase tracking-wider text-blaze-black/70 font-bold">Quest Name</p>
+                  <p className="text-sm uppercase tracking-wider text-blaze-black/70 font-bold">
+                    Quest Name
+                  </p>
                   <p className="font-bold text-xl text-blaze-black border-2 border-blaze-black/20 p-3 bg-blaze-white">
                     {watchedValues.name || "Untitled Quest"}
                   </p>
@@ -320,13 +392,21 @@ export function CreateQuestPage() {
 
                 <div className="grid grid-cols-1 gap-4">
                   <div className="border-2 border-blaze-black p-4 bg-blaze-white">
-                    <p className="text-sm uppercase tracking-wider text-blaze-black/70 font-bold">Entry Fee</p>
-                    <p className="font-bold text-3xl text-blaze-black">${watchedValues.entryFee || 0}</p>
+                    <p className="text-sm uppercase tracking-wider text-blaze-black/70 font-bold">
+                      Entry Fee
+                    </p>
+                    <p className="font-bold text-3xl text-blaze-black">
+                      ${watchedValues.entryFee || 0}
+                    </p>
                   </div>
 
                   <div className="border-2 border-blaze-black p-4 bg-blaze-white">
-                    <p className="text-sm uppercase tracking-wider text-blaze-black/70 font-bold">Calculated Prize Pool</p>
-                    <p className="font-bold text-3xl text-blaze-orange">${calculatedPrizePool.toLocaleString()}</p>
+                    <p className="text-sm uppercase tracking-wider text-blaze-black/70 font-bold">
+                      Calculated Prize Pool
+                    </p>
+                    <p className="font-bold text-3xl text-blaze-orange">
+                      ${calculatedPrizePool.toLocaleString()}
+                    </p>
                   </div>
                 </div>
 
@@ -354,9 +434,13 @@ export function CreateQuestPage() {
                   </div>
 
                   <div className="border-2 border-blaze-orange p-4 bg-blaze-orange/10">
-                    <p className="text-sm uppercase tracking-wider text-blaze-black/70 font-bold">Calculated Duration</p>
+                    <p className="text-sm uppercase tracking-wider text-blaze-black/70 font-bold">
+                      Calculated Duration
+                    </p>
                     <p className="font-bold text-2xl text-blaze-black">
-                      {calculatedDuration > 0 ? formatDuration(calculatedDuration) : "Invalid duration"}
+                      {calculatedDuration > 0
+                        ? formatDuration(calculatedDuration)
+                        : "Invalid duration"}
                     </p>
                   </div>
                 </div>
@@ -364,12 +448,29 @@ export function CreateQuestPage() {
                 <Separator className="bg-blaze-black h-0.5" />
 
                 <div className="text-xs text-blaze-black/60 space-y-2 border-2 border-blaze-black/20 p-4 bg-blaze-white">
-                  <p className="font-bold text-sm uppercase tracking-wider">Fee Structure:</p>
+                  <p className="font-bold text-sm uppercase tracking-wider">
+                    Fee Structure:
+                  </p>
                   <ul className="space-y-1">
                     <li>• Prize pool = 95% of total entry fees</li>
-                    <li>• Estimated participants: {Math.max(10, Math.min(100, (watchedValues.entryFee || 0) * 5))}</li>
+                    <li>
+                      • Estimated participants:{" "}
+                      {Math.max(
+                        10,
+                        Math.min(100, (watchedValues.entryFee || 0) * 5)
+                      )}
+                    </li>
                     <li>• Platform fee: 5%</li>
-                    <li>• Total estimated fees: ${((watchedValues.entryFee || 0) * Math.max(10, Math.min(100, (watchedValues.entryFee || 0) * 5))).toLocaleString()}</li>
+                    <li>
+                      • Total estimated fees: $
+                      {(
+                        (watchedValues.entryFee || 0) *
+                        Math.max(
+                          10,
+                          Math.min(100, (watchedValues.entryFee || 0) * 5)
+                        )
+                      ).toLocaleString()}
+                    </li>
                   </ul>
                 </div>
               </CardContent>
@@ -380,11 +481,15 @@ export function CreateQuestPage() {
                 <div className="flex items-start gap-4">
                   <Info className="w-6 h-6 text-blue-600 flex-shrink-0 mt-1" />
                   <div className="text-sm text-blue-800 font-mono">
-                    <p className="font-bold mb-3 text-lg uppercase tracking-wider">Quest Timeline:</p>
+                    <p className="font-bold mb-3 text-lg uppercase tracking-wider">
+                      Quest Timeline:
+                    </p>
                     <ul className="space-y-2 text-sm">
                       <li className="flex items-start gap-2">
                         <span className="font-bold">•</span>
-                        <span>Players can join from quest creation until start time</span>
+                        <span>
+                          Players can join from quest creation until start time
+                        </span>
                       </li>
                       <li className="flex items-start gap-2">
                         <span className="font-bold">•</span>
@@ -396,7 +501,9 @@ export function CreateQuestPage() {
                       </li>
                       <li className="flex items-start gap-2">
                         <span className="font-bold">•</span>
-                        <span>Winners are determined by portfolio performance</span>
+                        <span>
+                          Winners are determined by portfolio performance
+                        </span>
                       </li>
                     </ul>
                   </div>
