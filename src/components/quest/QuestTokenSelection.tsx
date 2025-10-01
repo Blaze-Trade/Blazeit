@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { useAptos } from '@/hooks/useAptos';
 import { useBlockchainTokens } from '@/hooks/useBlockchainTokens';
+import { useQuestStaking } from "@/hooks/useQuestStaking";
 import { useSupabasePortfolio } from "@/hooks/useSupabasePortfolio";
 import { useSupabaseQuests } from "@/hooks/useSupabaseQuests";
 import { useSupabaseTokens } from "@/hooks/useSupabaseTokens";
@@ -35,6 +36,8 @@ export function QuestTokenSelection({
   const { address, joinQuest } = usePortfolioStore();
   const { joinQuest: joinQuestSupabase } = useSupabaseQuests();
   const { buyToken: buyTokenSupabase } = useSupabasePortfolio(address);
+  const { selectPortfolio: selectPortfolioBlockchain, aptToOctas } =
+    useQuestStaking();
   const {
     tokens: supabaseTokens,
     loading: supabaseLoading,
@@ -46,7 +49,8 @@ export function QuestTokenSelection({
     error: blockchainError,
   } = useBlockchainTokens();
 
-  const tokens = (blockchainTokens.length > 0 ? blockchainTokens : supabaseTokens);
+  const tokens =
+    blockchainTokens.length > 0 ? blockchainTokens : supabaseTokens;
   const tokensLoading = blockchainLoading || supabaseLoading;
   const tokensError = blockchainError || supabaseError;
 
@@ -66,6 +70,12 @@ export function QuestTokenSelection({
   const addTokenSelection = (token: Token) => {
     if (selectedTokens.find((s) => s.token.id === token.id)) {
       toast.error("Token already selected");
+      return;
+    }
+
+    // Enforce exactly 5 tokens
+    if (selectedTokens.length >= 5) {
+      toast.error("You can only select exactly 5 tokens for the quest");
       return;
     }
 
@@ -118,8 +128,8 @@ export function QuestTokenSelection({
   const totalWithFees = totalInvestment + quest.entryFee;
 
   const handleConfirmSelection = () => {
-    if (selectedTokens.length === 0) {
-      toast.error("Please select at least one token");
+    if (selectedTokens.length !== 5) {
+      toast.error("You must select exactly 5 tokens for the quest");
       return;
     }
     setShowConfirmation(true);
@@ -131,42 +141,54 @@ export function QuestTokenSelection({
       return;
     }
 
+    // Validate exactly 5 tokens
+    if (selectedTokens.length !== 5) {
+      toast.error("You must select exactly 5 tokens");
+      return;
+    }
+
     setConfirming(true);
     try {
-      // Hardcoded address to send 1 APT to
-      const recipientAddress =
-        "0x9cc90ff526e7e8bdb3fc8d105b8e8abb73df9105888d46249499175c7085ef92";
-
-      // Transfer 1 APT to the hardcoded address
-      const transferResult = await transferAPT(
-        recipientAddress,
-        1, // 1 APT
-        "Joining Quest - Transfer 1 APT"
+      // Extract token addresses and investment amounts
+      const tokenAddresses = selectedTokens.map(
+        (s) => s.token.address || s.token.id
       );
+      const amountsAPT = selectedTokens.map((s) => s.investmentAmount);
 
-      if (transferResult.success) {
-        // Store transaction hash for display
-        setTransactionHash(transferResult.hash || "");
+      // Step 1: Submit portfolio to blockchain
+      const portfolioResult = await selectPortfolioBlockchain({
+        questId: parseInt(quest.id), // Assuming quest.id is the blockchain quest ID
+        tokenAddresses,
+        amountsAPT,
+      });
 
-        // Add quest participation to Supabase
-        const joinResult = await joinQuestSupabase(quest.id, address);
-        if (joinResult.success) {
-          // Add to local state as well
-          joinQuest(quest);
+      if (!portfolioResult.success) {
+        toast.error("Failed to submit portfolio to blockchain");
+        return;
+      }
 
-          // Show success modal
-          setShowSuccessModal(true);
+      // Store transaction hash
+      setTransactionHash(portfolioResult.hash || "");
 
-          // Auto-redirect after 5 seconds
-          setTimeout(() => {
-            navigate(`/quests/${quest.id}`);
-          }, 5000);
-        } else {
-          toast.error("Failed to save quest participation");
-          console.error("Failed to join quest in database:", joinResult.error);
-        }
+      // Step 2: Save portfolio to Supabase database
+      const joinResult = await joinQuestSupabase(quest.id, address);
+      if (joinResult.success) {
+        // Add to local state
+        joinQuest(quest);
+
+        // Show success modal
+        setShowSuccessModal(true);
+
+        // Auto-redirect after 5 seconds
+        setTimeout(() => {
+          navigate(`/quests/${quest.id}`);
+        }, 5000);
       } else {
-        toast.error("Transaction failed");
+        toast.warning(
+          "Portfolio submitted to blockchain but failed to save to database. Transaction: " +
+            portfolioResult.hash?.slice(0, 10)
+        );
+        console.error("Failed to join quest in database:", joinResult.error);
       }
     } catch (error) {
       console.error("Transaction error:", error);
@@ -313,7 +335,7 @@ export function QuestTokenSelection({
               {/* Selected Tokens */}
               <div className="space-y-4">
                 <h3 className="font-display text-2xl font-bold">
-                  Selected Tokens ({selectedTokens.length})
+                  Selected Tokens ({selectedTokens.length}/5)
                 </h3>
                 <div className="space-y-3">
                   {selectedTokens.map((selection) => (
@@ -478,13 +500,20 @@ export function QuestTokenSelection({
             <Card className="rounded-none border-2 border-blaze-black shadow-blaze-shadow">
               <CardHeader className="border-b-2 border-blaze-black">
                 <CardTitle className="font-display text-2xl font-bold">
-                  Portfolio ({selectedTokens.length})
+                  Portfolio ({selectedTokens.length}/5)
                 </CardTitle>
+                <p className="text-sm text-blaze-black/70 font-mono">
+                  {selectedTokens.length < 5
+                    ? `Select ${5 - selectedTokens.length} more token${
+                        5 - selectedTokens.length !== 1 ? "s" : ""
+                      }`
+                    : "✓ All 5 tokens selected"}
+                </p>
               </CardHeader>
               <CardContent className="p-6 space-y-4">
                 {selectedTokens.length === 0 ? (
                   <p className="text-center text-blaze-black/70 py-8">
-                    Select tokens to build your quest portfolio
+                    Select exactly 5 tokens to build your quest portfolio
                   </p>
                 ) : (
                   <>
@@ -601,9 +630,14 @@ export function QuestTokenSelection({
 
                     <Button
                       onClick={handleConfirmSelection}
-                      className="w-full h-12 rounded-none border-2 border-blaze-black bg-blaze-orange text-blaze-black font-bold uppercase hover:bg-blaze-black hover:text-blaze-white"
+                      disabled={selectedTokens.length !== 5}
+                      className="w-full h-12 rounded-none border-2 border-blaze-black bg-blaze-orange text-blaze-black font-bold uppercase hover:bg-blaze-black hover:text-blaze-white disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      Review & Confirm
+                      {selectedTokens.length === 5
+                        ? "Review & Confirm"
+                        : `Select ${5 - selectedTokens.length} More Token${
+                            5 - selectedTokens.length !== 1 ? "s" : ""
+                          }`}
                     </Button>
                   </>
                 )}

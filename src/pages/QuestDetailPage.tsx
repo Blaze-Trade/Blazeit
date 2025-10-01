@@ -4,6 +4,7 @@ import { QuestTokenSelection } from "@/components/quest/QuestTokenSelection";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Toaster, toast } from "@/components/ui/sonner";
+import { useQuestStaking } from "@/hooks/useQuestStaking";
 import { useSupabaseQuests } from "@/hooks/useSupabaseQuests";
 import { supabaseApi } from "@/lib/supabase-api";
 import { cn } from "@/lib/utils";
@@ -30,6 +31,8 @@ export function QuestDetailPage() {
   const { isConnected, address, joinedQuests, setActiveQuest } =
     usePortfolioStore();
   const { joinQuest } = useSupabaseQuests();
+  const { joinQuest: joinQuestBlockchain, hasUserParticipated } =
+    useQuestStaking();
 
   const isJoined = questId ? joinedQuests.includes(questId) : false;
 
@@ -83,18 +86,48 @@ export function QuestDetailPage() {
     }
 
     try {
-      // If user is already marked as joined locally (from quest list page),
-      // just complete the database joining without payment
-      if (isJoined) {
-        const result = await joinQuest(quest.id, address);
-        if (result.success) {
-          toast.success("Successfully joined the quest!");
-          setShowTokenSelection(true);
-        } else {
-          toast.error(result.error || "Failed to join quest");
-        }
+      // Check if quest has started (past buy_in_time)
+      const now = new Date();
+      const startTime = new Date(quest.startTime!);
+
+      if (now >= startTime) {
+        toast.error("Cannot join quest - registration period has ended");
+        return;
+      }
+
+      // Check if user already participated on blockchain
+      const participationCheck = await hasUserParticipated(
+        address,
+        parseInt(quest.id)
+      );
+
+      if (participationCheck.hasParticipated) {
+        toast.info("You have already joined this quest");
+        setShowTokenSelection(true);
+        return;
+      }
+
+      // Step 1: Join quest on blockchain (pays entry fee)
+      const blockchainResult = await joinQuestBlockchain(parseInt(quest.id));
+
+      if (!blockchainResult.success) {
+        toast.error("Failed to join quest on blockchain");
+        return;
+      }
+
+      // Step 2: Save to Supabase database
+      const dbResult = await joinQuest(quest.id, address);
+
+      if (dbResult.success) {
+        toast.success("Successfully joined the quest!");
+        // Show token selection for portfolio
+        setShowTokenSelection(true);
       } else {
-        // If not joined yet, just show token selection (transaction happens on submit)
+        toast.warning(
+          "Joined quest on blockchain but failed to save to database. Transaction: " +
+            blockchainResult.hash?.slice(0, 10)
+        );
+        // Still show token selection since blockchain succeeded
         setShowTokenSelection(true);
       }
     } catch (error: any) {
