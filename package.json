@@ -8,6 +8,8 @@
     "build": "vite build",
     "lint": "eslint --cache -f json --quiet .",
     "preview": "bun run build && vite preview --host 0.0.0.0 --port ${PORT:-4173}",
+    "start": "bun run build && vite serve --host 0.0.0.0 --port ${PORT:-4173}",
+    "serve": "serve -s dist -l ${PORT:-3006}",
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:run": "vitest run",

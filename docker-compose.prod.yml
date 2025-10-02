@@ -1,5 +1,5 @@
 services:
-  arx-predict-frontend:
+  blaze-frontend:
     build:
       context: .
       dockerfile: Dockerfile.prod
@@ -36,16 +36,16 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.arx-predict-frontend.rule=Host(`blaze.jovihost.site`)"
-      - "traefik.http.routers.arx-predict-frontend.entrypoints=websecure"
-      - "traefik.http.routers.arx-predict-frontend.tls.certResolver=letsencrypt"
-      - "traefik.http.services.arx-predict-frontend.loadbalancer.server.port=${PORT}"
-    networks:
-      - dokploy-network
+    # labels:
+    #   - "traefik.enable=true"
+    #   - "traefik.http.routers.blaze-frontend.rule=Host(`blaze.jovihost.site`)"
+    #   - "traefik.http.routers.blaze-frontend.entrypoints=websecure"
+    #   - "traefik.http.routers.blaze-frontend.tls.certResolver=letsencrypt"
+    #   - "traefik.http.services.blaze-frontend.loadbalancer.server.port=${PORT}"
+    # networks:
+    #   - blazeit-network
 
 
-networks:
-  dokploy-network:
-    external: true
+# networks:
+#   dokploy-network:
+#     external: true

@@ -17,10 +17,9 @@ WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
-COPY bun.lock ./
 
-# install bun
-RUN npm install -g bun
+# install bun and serve
+RUN npm install -g bun serve
 
 # Install all dependencies (including dev dependencies for build)
 RUN bun install
@@ -55,21 +54,22 @@ COPY . .
 
 RUN bun run build
 
-# Production stage
-FROM node:18-alpine AS production
+# # Production stage
+# FROM node:18-alpine AS production
 
-# Install serve for serving static files and runtime dependencies
-RUN apk add --no-cache wget && \
-    npm install -g serve
+# # Install serve for serving static files and runtime dependencies
+# RUN apk add --no-cache wget && \
+#     npm install -g serve && \
+#     npm install -g bun
 
 # Set working directory
 WORKDIR /app
 
-# Copy built application from builder stage
-COPY --from=builder /app/dist ./dist
+# # Copy built application from builder stage
+# COPY --from=builder /app/dist ./dist
 
-# Copy package.json for serve command
-COPY --from=builder /app/package.json ./package.json
+# # Copy package.json for serve command
+# COPY --from=builder /app/package.json ./package.json
 
 # Create non-root user for security
 RUN addgroup -g 1001 -S nodejs
@@ -80,7 +80,7 @@ RUN chown -R nextjs:nodejs /app
 USER nextjs
 
 # Expose port
-EXPOSE 3006
+EXPOSE $PORT
 
 # Set environment variables
 ENV NODE_ENV=production
@@ -101,7 +101,8 @@ RUN echo "VITE_QUEST_MODULE_ADDRESS=$VITE_QUEST_MODULE_ADDRESS" >> .env
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3006 || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT:-3007} || exit 1
 
 # Start the application
-CMD ["serve", "-s", "dist", "-l", "3006"]
+# CMD ["serve", "-s", "dist", "-l", "3007"]
+CMD ["bun", "run", "start"]
