@@ -1,5 +1,7 @@
 // Contract constants
-export const MODULE_ADDRESS = import.meta.env.VITE_MODULE_ADDRESS || "0x9239ac2bb7bb998c6d19d1b309dd2093f130185710415832caf30bf0c99d678a";
+export const MODULE_ADDRESS =
+  import.meta.env.VITE_MODULE_ADDRESS ||
+  "0x5fb97dfeb76077901d88b70f6f02f9f164e83828cc173998f52d019777aa931a";
 
 // Network configuration
 export const APTOS_NETWORK = import.meta.env.VITE_APTOS_NETWORK || "devnet";

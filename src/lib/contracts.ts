@@ -1,27 +1,28 @@
 // Contract configuration and addresses
 export const CONTRACT_CONFIG = {
   // Network configuration
-  network: process.env.NODE_ENV === 'production' ? 'mainnet' : 'devnet',
-  
+  network: process.env.NODE_ENV === "production" ? "mainnet" : "devnet",
+
   // Contract addresses - using the deployed blaze-contracts
   addresses: {
-    blazeTokenLaunchpad: '0x9239ac2bb7bb998c6d19d1b309dd2093f130185710415832caf30bf0c99d678a',
+    blazeTokenLaunchpad:
+      "0x5fb97dfeb76077901d88b70f6f02f9f164e83828cc173998f52d019777aa931a",
   },
-  
+
   // Contract module names
   modules: {
-    launchpad: 'blaze_token_launchpad::launchpad',
+    launchpad: "blaze_token_launchpad::launchpad",
   },
-  
+
   // Gas configuration
   gas: {
     defaultGasUnitPrice: 100,
     maxGasAmount: 100000,
   },
-  
+
   // Token creation fee (in octas)
   tokenCreationFee: 100000000, // 0.1 APT
-  
+
   // Quest configuration
   quest: {
     maxParticipants: 100,
@@ -37,13 +38,13 @@ export const CONTRACT_FUNCTIONS = {
     // Token functions
     createToken: `${CONTRACT_CONFIG.addresses.blazeTokenLaunchpad}::launchpad::create_token`,
     getTokenInfo: `${CONTRACT_CONFIG.addresses.blazeTokenLaunchpad}::launchpad::get_token_info`,
-    
+
     // Quest functions
     createQuest: `${CONTRACT_CONFIG.addresses.blazeTokenLaunchpad}::launchpad::create_quest`,
     joinQuest: `${CONTRACT_CONFIG.addresses.blazeTokenLaunchpad}::launchpad::join_quest`,
     getQuestInfo: `${CONTRACT_CONFIG.addresses.blazeTokenLaunchpad}::launchpad::get_quest_info`,
     hasJoinedQuest: `${CONTRACT_CONFIG.addresses.blazeTokenLaunchpad}::launchpad::has_joined_quest`,
-    
+
     // Trading functions
     buyToken: `${CONTRACT_CONFIG.addresses.blazeTokenLaunchpad}::launchpad::buy_token`,
     sellToken: `${CONTRACT_CONFIG.addresses.blazeTokenLaunchpad}::launchpad::sell_token`,
@@ -109,11 +110,11 @@ export const CONTRACT_QUERIES = {
       );
       return await client.view(payload);
     } catch (error) {
-      console.error('Error fetching token info:', error);
+      console.error("Error fetching token info:", error);
       return null;
     }
   },
-  
+
   // Quest queries
   getQuestInfo: async (client: any, questId: string) => {
     try {
@@ -124,13 +125,17 @@ export const CONTRACT_QUERIES = {
       );
       return await client.view(payload);
     } catch (error) {
-      console.error('Error fetching quest info:', error);
+      console.error("Error fetching quest info:", error);
       return null;
     }
   },
-  
+
   // Portfolio queries
-  getPortfolioInfo: async (client: any, questId: string, participant: string) => {
+  getPortfolioInfo: async (
+    client: any,
+    questId: string,
+    participant: string
+  ) => {
     try {
       const payload = createTransactionPayload(
         CONTRACT_FUNCTIONS.launchpad.getPortfolioInfo,
@@ -139,7 +144,7 @@ export const CONTRACT_QUERIES = {
       );
       return await client.view(payload);
     } catch (error) {
-      console.error('Error fetching portfolio info:', error);
+      console.error("Error fetching portfolio info:", error);
       return null;
     }
   },

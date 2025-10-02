@@ -8,7 +8,8 @@ export const MOCK_TOKENS: Token[] = [
     change24h: 2.15,
     marketCap: 3900000000,
     logoUrl: "https://s2.coinmarketcap.com/static/img/coins/64x64/21794.png",
-    address: "0x1::aptos_coin::AptosCoin",
+    address:
+      "0x0000000000000000000000000000000000000000000000000000000000000001",
     decimals: 8,
   },
   {
@@ -19,7 +20,8 @@ export const MOCK_TOKENS: Token[] = [
     change24h: -1.45,
     marketCap: 2400000000,
     logoUrl: "https://s2.coinmarketcap.com/static/img/coins/64x64/20947.png",
-    address: "0x1::sui::Sui",
+    address:
+      "0x0000000000000000000000000000000000000000000000000000000000000002",
     decimals: 9,
   },
   {
@@ -30,7 +32,8 @@ export const MOCK_TOKENS: Token[] = [
     change24h: 0.5,
     marketCap: 1300000000000,
     logoUrl: "https://s2.coinmarketcap.com/static/img/coins/64x64/1.png",
-    address: "0x1::bitcoin::Bitcoin",
+    address:
+      "0x0000000000000000000000000000000000000000000000000000000000000003",
     decimals: 8,
   },
   {
@@ -41,7 +44,8 @@ export const MOCK_TOKENS: Token[] = [
     change24h: 1.2,
     marketCap: 420000000000,
     logoUrl: "https://s2.coinmarketcap.com/static/img/coins/64x64/1027.png",
-    address: "0x1::ethereum::Ethereum",
+    address:
+      "0x0000000000000000000000000000000000000000000000000000000000000004",
     decimals: 18,
   },
   {
@@ -52,7 +56,8 @@ export const MOCK_TOKENS: Token[] = [
     change24h: -3.0,
     marketCap: 69000000000,
     logoUrl: "https://s2.coinmarketcap.com/static/img/coins/64x64/5426.png",
-    address: "0x1::solana::Solana",
+    address:
+      "0x0000000000000000000000000000000000000000000000000000000000000005",
     decimals: 9,
   },
 ];

@@ -18,20 +18,23 @@ export function TokenCreationPage() {
   const { createToken, uploadImage, isCreating } = useTokenCreation();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
-  // Form state
+  // Form state - optimized for smart contract's hardcoded cubic bonding curve
+  // IMPORTANT: Contract uses cubic formula (amount³) which overflows with large amounts
+  // Solution: Use ZERO DECIMALS - tokens are whole numbers only
   const [formData, setFormData] = useState({
     symbol: "",
     name: "",
     description: "",
     image: null as File | null,
     imageUrl: null as string | null,
-    maxSupply: 1000000,
+    maxSupply: 1000000, // 1 million tokens (0 decimals = whole numbers only)
     projectURL: "",
-    targetSupply: 100000,
-    virtualLiquidity: 1,
-    curveExponent: 2,
-    maxMintPerAccount: 0,
+    targetSupply: 100000, // 100K tokens (cubic curve will reach this slowly)
+    virtualLiquidity: 1000000, // 1M APT (enough liquidity for reasonable prices)
+    curveExponent: 2, // Stored but not used (contract hardcodes cubic regardless)
+    maxMintPerAccount: 0, // NO LIMIT (0 = unlimited)
   });
 
   // Character limits
@@ -245,7 +248,10 @@ export function TokenCreationPage() {
                 htmlFor="projectURL"
                 className="text-lg font-bold text-blaze-black"
               >
-                Project URL
+                Project URL{" "}
+                <span className="text-sm text-blaze-black/50 font-normal">
+                  (Optional)
+                </span>
               </Label>
               <Input
                 id="projectURL"
@@ -258,104 +264,154 @@ export function TokenCreationPage() {
               />
             </div>
 
-            {/* Max Supply */}
-            <div className="space-y-2">
-              <Label
-                htmlFor="maxSupply"
-                className="text-lg font-bold text-blaze-black"
+            {/* Advanced Options Toggle */}
+            <div className="pt-4 border-t-2 border-blaze-black/10">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowAdvanced(!showAdvanced)}
+                className="w-full rounded-none border-2 border-blaze-black/20 bg-blaze-white text-blaze-black hover:bg-blaze-black/5"
               >
-                Max Supply
-              </Label>
-              <Input
-                id="maxSupply"
-                type="number"
-                value={formData.maxSupply}
-                onChange={(e) => handleInputChange("maxSupply", e.target.value)}
-                placeholder="1000000"
-                className="rounded-none border-2 border-blaze-black bg-blaze-white text-blaze-black text-lg"
-              />
+                {showAdvanced ? "Hide" : "Show"} Advanced Options
+              </Button>
+              {!showAdvanced && (
+                <p className="text-sm text-blaze-black/50 mt-2 font-mono text-center">
+                  Using smart defaults: 1M max supply, 100K target, 1M APT
+                  liquidity, 0 decimals (whole numbers only - prevents overflow)
+                </p>
+              )}
             </div>
 
-            {/* Target Supply */}
-            <div className="space-y-2">
-              <Label
-                htmlFor="targetSupply"
-                className="text-lg font-bold text-blaze-black"
-              >
-                Target Supply
-              </Label>
-              <Input
-                id="targetSupply"
-                type="number"
-                value={formData.targetSupply}
-                onChange={(e) =>
-                  handleInputChange("targetSupply", e.target.value)
-                }
-                placeholder="100000"
-                className="rounded-none border-2 border-blaze-black bg-blaze-white text-blaze-black text-lg"
-              />
-            </div>
+            {/* Advanced Options - Collapsible */}
+            {showAdvanced && (
+              <div className="space-y-6 pt-4 border-t-2 border-blaze-black/10">
+                <p className="text-sm text-blaze-black/70 font-mono">
+                  ⚠️ Advanced options - tokens use 0 decimals (whole numbers)
+                  due to cubic curve overflow (amount³ formula)
+                </p>
 
-            {/* Virtual Liquidity */}
-            <div className="space-y-2">
-              <Label
-                htmlFor="virtualLiquidity"
-                className="text-lg font-bold text-blaze-black"
-              >
-                Virtual Liquidity (APT)
-              </Label>
-              <Input
-                id="virtualLiquidity"
-                type="number"
-                step="0.1"
-                value={formData.virtualLiquidity}
-                onChange={(e) =>
-                  handleInputChange("virtualLiquidity", e.target.value)
-                }
-                placeholder="1"
-                className="rounded-none border-2 border-blaze-black bg-blaze-white text-blaze-black text-lg"
-              />
-            </div>
+                {/* Max Supply */}
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="maxSupply"
+                    className="text-lg font-bold text-blaze-black"
+                  >
+                    Max Supply
+                  </Label>
+                  <Input
+                    id="maxSupply"
+                    type="number"
+                    value={formData.maxSupply}
+                    onChange={(e) =>
+                      handleInputChange("maxSupply", e.target.value)
+                    }
+                    placeholder="1000000"
+                    className="rounded-none border-2 border-blaze-black bg-blaze-white text-blaze-black text-lg"
+                  />
+                  <p className="text-xs text-blaze-black/50 font-mono">
+                    Human-readable. 1000000 = 1 million tokens. With 0 decimals,
+                    tokens are whole numbers only. Max safe buy: ~10K tokens at
+                    once.
+                  </p>
+                </div>
 
-            {/* Curve Exponent */}
-            <div className="space-y-2">
-              <Label
-                htmlFor="curveExponent"
-                className="text-lg font-bold text-blaze-black"
-              >
-                Curve Exponent
-              </Label>
-              <Input
-                id="curveExponent"
-                type="number"
-                value={formData.curveExponent}
-                onChange={(e) =>
-                  handleInputChange("curveExponent", e.target.value)
-                }
-                placeholder="2"
-                className="rounded-none border-2 border-blaze-black bg-blaze-white text-blaze-black text-lg"
-              />
-            </div>
+                {/* Target Supply */}
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="targetSupply"
+                    className="text-lg font-bold text-blaze-black"
+                  >
+                    Target Supply
+                  </Label>
+                  <Input
+                    id="targetSupply"
+                    type="number"
+                    value={formData.targetSupply}
+                    onChange={(e) =>
+                      handleInputChange("targetSupply", e.target.value)
+                    }
+                    placeholder="100000"
+                    className="rounded-none border-2 border-blaze-black bg-blaze-white text-blaze-black text-lg"
+                  />
+                  <p className="text-xs text-blaze-black/50 font-mono">
+                    Human-readable. 100000 = 100K tokens. Bonding curve
+                    deactivates when this supply is reached.
+                  </p>
+                </div>
 
-            {/* Max Mint Per Account */}
-            <div className="space-y-2">
-              <Label
-                htmlFor="maxMintPerAccount"
-                className="text-lg font-bold text-blaze-black"
-              >
-                Max Mint Per Account (0 = no limit)
-              </Label>
-              <Input
-                id="maxMintPerAccount"
-                type="number"
-                value={formData.maxMintPerAccount}
-                onChange={(e) =>
-                  handleInputChange("maxMintPerAccount", e.target.value)
-                }
-                placeholder="0"
-                className="rounded-none border-2 border-blaze-black bg-blaze-white text-blaze-black text-lg"
-              />
-            </div>
+                {/* Virtual Liquidity */}
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="virtualLiquidity"
+                    className="text-lg font-bold text-blaze-black"
+                  >
+                    Virtual Liquidity (in APT)
+                  </Label>
+                  <Input
+                    id="virtualLiquidity"
+                    type="number"
+                    value={formData.virtualLiquidity}
+                    onChange={(e) =>
+                      handleInputChange("virtualLiquidity", e.target.value)
+                    }
+                    placeholder="1000000"
+                    className="rounded-none border-2 border-blaze-black bg-blaze-white text-blaze-black text-lg"
+                  />
+                  <p className="text-xs text-blaze-black/50 font-mono">
+                    In APT. 1000000 = 1M APT. Controls token pricing - higher
+                    liquidity = lower prices. Works with 2 decimal tokens.
+                  </p>
+                </div>
+
+                {/* Curve Exponent */}
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="curveExponent"
+                    className="text-lg font-bold text-blaze-black"
+                  >
+                    Curve Exponent
+                  </Label>
+                  <Input
+                    id="curveExponent"
+                    type="number"
+                    value={formData.curveExponent}
+                    onChange={(e) =>
+                      handleInputChange("curveExponent", e.target.value)
+                    }
+                    placeholder="1"
+                    className="rounded-none border-2 border-blaze-black bg-blaze-white text-blaze-black text-lg"
+                  />
+                  <p className="text-xs text-blaze-black/50 font-mono">
+                    Stored but NOT USED. Contract hardcodes cubic formula
+                    (amount³). This parameter doesn't affect pricing.
+                  </p>
+                </div>
+
+                {/* Max Mint Per Account */}
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="maxMintPerAccount"
+                    className="text-lg font-bold text-blaze-black"
+                  >
+                    Max Mint Per Account
+                  </Label>
+                  <Input
+                    id="maxMintPerAccount"
+                    type="number"
+                    value={formData.maxMintPerAccount}
+                    onChange={(e) =>
+                      handleInputChange("maxMintPerAccount", e.target.value)
+                    }
+                    placeholder="0"
+                    className="rounded-none border-2 border-blaze-black bg-blaze-white text-blaze-black text-lg"
+                  />
+                  <p className="text-xs text-blaze-black/50 font-mono">
+                    <strong>0 = NO LIMIT</strong> (recommended). Set a number to
+                    limit per wallet.
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Quality section removed */}
 

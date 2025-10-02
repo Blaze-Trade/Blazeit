@@ -1,8 +1,14 @@
 import { TokenCard } from "@/components/trade/TokenCard";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Slider } from "@/components/ui/slider";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Slider } from "@/components/ui/slider";
 import { Toaster, toast } from "@/components/ui/sonner";
 import { useAptos } from "@/hooks/useAptos";
 import { useBlockchainTokens } from "@/hooks/useBlockchainTokens";
@@ -12,7 +18,10 @@ import { useSupabaseWatchlist } from "@/hooks/useSupabaseWatchlist";
 import { api } from "@/lib/api-client";
 import { CONTRACT_FUNCTIONS, createTransactionPayload } from "@/lib/contracts";
 import { usePortfolioStore } from "@/stores/portfolioStore";
-import { useWallet } from "@aptos-labs/wallet-adapter-react";
+import {
+  InputTransactionData,
+  useWallet,
+} from "@aptos-labs/wallet-adapter-react";
 import { MOCK_TOKENS } from "@shared/mock-data";
 import type { Token } from "@shared/types";
 import { ArrowUp, Heart, Loader2, Swords, Wallet, X } from "lucide-react";
@@ -25,7 +34,7 @@ export function TradePage() {
   const [initialTokens, setInitialTokens] = useState<Token[]>([]);
   const [showBuyDialog, setShowBuyDialog] = useState(false);
   const [pendingBuyToken, setPendingBuyToken] = useState<Token | null>(null);
-  const [buyQuantity, setBuyQuantity] = useState<number>(1);
+  const [buyQuantity, setBuyQuantity] = useState<number>(10); // Start with 10 tokens (safe for 0 decimal tokens)
 
   const {
     isConnected,
@@ -233,19 +242,27 @@ export function TradePage() {
               <div className="px-1">
                 <Slider
                   value={[buyQuantity]}
-                  min={0.01}
-                  max={100}
-                  step={0.01}
+                  min={1}
+                  max={1000}
+                  step={1}
                   onValueChange={(v) => setBuyQuantity(Number(v[0]))}
                 />
               </div>
               <div className="flex items-center gap-2">
                 <Input
                   type="number"
-                  step="0.01"
-                  min="0.01"
+                  step="1"
+                  min="1"
+                  max="10000"
                   value={buyQuantity}
-                  onChange={(e) => setBuyQuantity(Math.max(0.01, parseFloat(e.target.value) || 0.01))}
+                  onChange={(e) =>
+                    setBuyQuantity(
+                      Math.min(
+                        10000,
+                        Math.max(1, parseFloat(e.target.value) || 1)
+                      )
+                    )
+                  }
                   className="rounded-none border-2 border-blaze-black w-32"
                 />
                 {pendingBuyToken && (
@@ -274,38 +291,112 @@ export function TradePage() {
                 const token = pendingBuyToken;
                 const quantity = buyQuantity;
                 setShowBuyDialog(false);
+
+                // Validate token address exists
+                if (!token.address) {
+                  toast.error(
+                    `Token ${token.symbol} does not have a contract address`,
+                    {
+                      description:
+                        "This token hasn't been deployed on the blockchain yet.",
+                    }
+                  );
+                  restoreCard(token.id);
+                  setPendingBuyToken(null);
+                  return;
+                }
+
+                // Validate token decimals exists
+                if (token.decimals === undefined || token.decimals === null) {
+                  toast.error(
+                    `Token ${token.symbol} is missing decimal information`,
+                    {
+                      description:
+                        "Cannot calculate correct amount without decimals.",
+                    }
+                  );
+                  restoreCard(token.id);
+                  setPendingBuyToken(null);
+                  return;
+                }
+
                 try {
                   if (isInQuestMode && activeQuest) {
-                    await simulateTransaction(`Buying ${quantity} ${token.symbol}`);
+                    await simulateTransaction(
+                      `Buying ${quantity} ${token.symbol}`
+                    );
                     await api(`/api/quests/${activeQuest.id}/buy`, {
                       method: "POST",
-                      body: JSON.stringify({ userId: address, token, quantity }),
+                      body: JSON.stringify({
+                        userId: address,
+                        token,
+                        quantity,
+                      }),
                     });
-                    toast.success(`Added ${quantity} ${token.symbol} to Quest Portfolio`);
+                    toast.success(
+                      `Added ${quantity} ${token.symbol} to Quest Portfolio`
+                    );
                   } else {
-                    // Build payload using quantity; placeholder arguments preserved
-                    const payload = {
-                      data: createTransactionPayload(
-                        CONTRACT_FUNCTIONS.launchpad.buyToken,
-                        [],
-                        [
-                          "0x3d4b170229fcef725b913cdb9a4bfbddcdea07b9b1b1b230ca19f5367a0c7df8",
-                          Math.round(1000000 * quantity),
-                        ]
-                      ),
-                    };
-                    const toastId = toast.loading(`Buying ${quantity} ${token.symbol}...`, {
-                      description: "Please approve the transaction in your wallet.",
+                    // Build payload using the token's address and decimals from Supabase
+                    // Convert human-readable quantity to smallest unit based on token decimals
+                    // Tokens created through this app use 0 decimals (optimized for cubic curve):
+                    // - With 0 decimals: 1 token = 1 smallest unit (whole numbers only!)
+                    // - With 8 decimals: 1 token = 100,000,000 smallest units (legacy/external tokens)
+                    // - Maximum safe amount with 0 decimals: ~10,000 tokens (10,000³ = 10^12)
+                    const amountInSmallestUnit = Math.round(
+                      quantity * Math.pow(10, token.decimals)
+                    );
+
+                    console.log(`🛒 Buying ${quantity} ${token.symbol}:`, {
+                      tokenId: token.id,
+                      tokenAddress: token.address,
+                      decimals: token.decimals,
+                      humanReadable: quantity,
+                      smallestUnit: amountInSmallestUnit,
+                      calculation: `${quantity} * 10^${token.decimals} = ${amountInSmallestUnit}`,
                     });
+
+                    const transactionPayload = createTransactionPayload(
+                      CONTRACT_FUNCTIONS.launchpad.buyToken,
+                      [],
+                      [token.address, amountInSmallestUnit]
+                    );
+
+                    console.log("📤 Transaction payload:", transactionPayload);
+
+                    const payload: InputTransactionData = {
+                      data: {
+                        function:
+                          transactionPayload.function as `${string}::${string}::${string}`,
+                        typeArguments: transactionPayload.typeArguments,
+                        functionArguments: transactionPayload.functionArguments,
+                      },
+                    };
+
+                    const toastId = toast.loading(
+                      `Buying ${quantity} ${token.symbol}...`,
+                      {
+                        description:
+                          "Please approve the transaction in your wallet.",
+                      }
+                    );
                     const result = await signAndSubmitTransaction(payload);
                     if (result && result.hash) {
-                      toast.success(`Successfully bought ${quantity} ${token.symbol}!`, {
-                        id: toastId,
-                        description: `Transaction: ${result.hash.slice(0, 10)}...`,
-                      });
+                      toast.success(
+                        `Successfully bought ${quantity} ${token.symbol}!`,
+                        {
+                          id: toastId,
+                          description: `Transaction: ${result.hash.slice(
+                            0,
+                            10
+                          )}...`,
+                        }
+                      );
                       buyTokenStore(token, quantity);
                     } else {
-                      toast.error(`Failed to buy ${token.symbol}`, { id: toastId });
+                      toast.error(`Failed to buy ${token.symbol}`, {
+                        id: toastId,
+                      });
                       toast.dismiss(toastId);
                       restoreCard(token.id);
                     }
@@ -314,15 +405,54 @@ export function TradePage() {
                   const isUserRejection =
                     error?.message?.includes("User rejected") ||
                     error?.message?.includes("rejected");
-                  console.error("Token purchase failed:", error);
-                  toast.error(
-                    isUserRejection ? "Transaction rejected" : `Failed to buy ${token.symbol}`,
-                    {
-                      description: isUserRejection
-                        ? "You cancelled the transaction."
-                        : error?.message || "Please try again.",
-                    }
-                  );
+                  const isAddressError =
+                    error?.message?.includes(
+                      "does not exist at this address"
+                    ) || error?.message?.includes("object does not exist");
+                  const isMintLimitError =
+                    error?.message?.includes("Mint limit reached") ||
+                    error?.message?.includes("mint limit");
+                  const isSupplyError =
+                    error?.message?.includes("Insufficient supply") ||
+                    error?.message?.includes("supply");
+                  const isOverflowError =
+                    error?.message?.includes("arithmetic") ||
+                    error?.message?.includes("overflow") ||
+                    error?.message?.toLowerCase().includes("generic error");
+
+                  console.error("❌ Token purchase failed:", error);
+                  console.error("Error details:", {
+                    message: error?.message,
+                    code: error?.code,
+                    name: error?.name,
+                  });
+
+                  let errorTitle = `Failed to buy ${token.symbol}`;
+                  let errorDescription = error?.message || "Please try again.";
+
+                  if (isUserRejection) {
+                    errorTitle = "Transaction rejected";
+                    errorDescription = "You cancelled the transaction.";
+                  } else if (isAddressError) {
+                    errorTitle = "Invalid token address";
+                    errorDescription = `The token ${token.symbol} doesn't exist on the blockchain. The token may not have been properly deployed.`;
+                  } else if (isMintLimitError) {
+                    errorTitle = "Mint limit reached";
+                    errorDescription = `You've reached the maximum amount of ${token.symbol} you can buy. The token has a per-address mint limit.`;
+                  } else if (isSupplyError) {
+                    errorTitle = "Insufficient token supply";
+                    errorDescription = `Not enough ${token.symbol} tokens available. Try buying a smaller amount.`;
+                  } else if (isOverflowError) {
+                    errorTitle = "Arithmetic Overflow (Bonding Curve Issue)";
+                    errorDescription = `This token was created with insufficient virtual liquidity, causing overflow in the bonding curve calculation. Token address: ${token.address.slice(
+                      0,
+                      10
+                    )}... - Please contact the token creator to redeploy with higher liquidity (10B+ APT).`;
+                  }
+
+                  toast.error(errorTitle, {
+                    description: errorDescription,
+                  });
                   restoreCard(token.id);
                 } finally {
                   setPendingBuyToken(null);

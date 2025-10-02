@@ -25,7 +25,7 @@ async function getAptosClient() {
 
 // Contract configuration
 const LAUNCHPAD_ADDRESS =
-  "0x9239ac2bb7bb998c6d19d1b309dd2093f130185710415832caf30bf0c99d678a";
+  "0x5fb97dfeb76077901d88b70f6f02f9f164e83828cc173998f52d019777aa931a";
 
 // Type definitions matching the reference implementation
 export type CreateTokenArguments = {
@@ -178,6 +178,9 @@ export function useLaunchpadIntegration() {
       maxMintPerAccount,
     } = args;
 
+    // For Move Option<T> types when using functionArguments (modern SDK):
+    // - Vector notation: pass raw values directly, SDK handles Option encoding
+    // - The function signature in Move tells SDK which args are Option types
     return {
       type: "entry_function_payload",
       function: `${LAUNCHPAD_ADDRESS}::launchpad::create_token`,
@@ -194,7 +197,7 @@ export function useLaunchpadIntegration() {
         curveExponent, // curve_exponent: u64
         maxMintPerAccount && maxMintPerAccount > 0
           ? convertAmountFromHumanReadableToOnChain(maxMintPerAccount, decimal)
-          : 0, // mint_limit_per_addr: Option<u64>
+          : null, // mint_limit_per_addr: Option<u64> - null = option::none() (no limit!)
       ],
     };
   };

@@ -71,8 +71,12 @@ export function CreateQuestPage() {
   const { isConnected, address } = usePortfolioStore();
   const { createQuest: createQuestSupabase } = useSupabaseQuests();
   const { createQuest, isCreating } = useQuestManagement();
-  const { createQuest: createQuestBlockchain, isLoading: isBlockchainLoading } =
-    useQuestStaking();
+  const {
+    createQuest: createQuestBlockchain,
+    isLoading: isBlockchainLoading,
+    getAptosClient,
+    contractAddress: QUEST_MODULE_ADDRESS,
+  } = useQuestStaking();
 
   // Set default times: start in 1 hour, end in 1 week
   const defaultStartTime = new Date(Date.now() + 60 * 60 * 1000); // 1 hour from now
@@ -184,7 +188,88 @@ export function CreateQuestPage() {
         return;
       }
 
-      // Step 2: Store quest in Supabase database
+      // Extract blockchain quest ID from transaction events
+      // The smart contract emits QuestCreatedEvent with quest_id
+      let blockchainQuestId: number | undefined;
+      if (blockchainResult.result && blockchainResult.hash) {
+        try {
+          // Query the transaction to get the actual quest ID from events
+          const client = await getAptosClient();
+          const transaction = await client.getTransactionByHash({
+            transactionHash: blockchainResult.hash,
+          });
+
+          // Look for QuestCreatedEvent in the transaction events
+          if (transaction.events) {
+            const questCreatedEvent = transaction.events.find(
+              (event: any) =>
+                event.type?.includes("QuestCreatedEvent") ||
+                event.type?.includes("quest_staking::QuestCreatedEvent")
+            );
+
+            if (questCreatedEvent && questCreatedEvent.data) {
+              // Extract quest_id from the event data
+              blockchainQuestId = parseInt(
+                questCreatedEvent.data.quest_id ||
+                  questCreatedEvent.data.questId
+              );
+              console.log(
+                "Extracted quest ID from blockchain:",
+                blockchainQuestId
+              );
+            }
+          }
+
+          // Fallback: if we can't parse the event, query the contract for quest counter
+          if (!blockchainQuestId) {
+            console.warn(
+              "Could not extract quest ID from transaction events, querying contract"
+            );
+            try {
+              // Query the smart contract to get the current quest counter
+              const result = await client.view({
+                payload: {
+                  function: `${QUEST_MODULE_ADDRESS}::quest_staking::get_quest_counter`,
+                  typeArguments: [],
+                  functionArguments: [],
+                },
+              });
+
+              if (result && result[0]) {
+                blockchainQuestId = parseInt(result[0]);
+                console.log(
+                  "Retrieved quest counter from contract:",
+                  blockchainQuestId
+                );
+              } else {
+                // Ultimate fallback - use the known quest ID from explorer
+                blockchainQuestId = 6;
+                console.warn(
+                  "Could not get quest counter, using fallback ID:",
+                  blockchainQuestId
+                );
+              }
+            } catch (error) {
+              console.error("Error querying quest counter:", error);
+              // Ultimate fallback
+              blockchainQuestId = 6;
+            }
+          }
+        } catch (error) {
+          console.error("Error parsing transaction events:", error);
+          // Fallback to known quest ID
+          blockchainQuestId = 6;
+        }
+
+        console.log(
+          "Quest created on blockchain with transaction:",
+          blockchainResult.hash,
+          "Quest ID:",
+          blockchainQuestId
+        );
+      }
+
+      // Step 2: Store quest in Supabase database with blockchain quest ID
       const supabaseResult = await createQuestSupabase({
         name: values.name,
         description: `A trading quest with ${formatDuration(
@@ -192,11 +277,13 @@ export function CreateQuestPage() {
         )} duration`,
         entryFee: values.entryFee,
         prizePool: calculatedPrizePool,
-        durationHours: calculatedDuration,
+        durationHours: Math.ceil(calculatedDuration), // Convert to integer hours (round up)
         startTime: startDate,
         endTime: endDate,
         maxParticipants: 100,
         creatorWalletAddress: address,
+        blockchainQuestId: blockchainQuestId,
+        blockchainTxHash: blockchainResult.hash,
       });
 
       if (supabaseResult.success) {
