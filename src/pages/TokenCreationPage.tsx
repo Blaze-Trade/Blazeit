@@ -29,6 +29,7 @@ export function TokenCreationPage() {
     description: "",
     image: null as File | null,
     imageUrl: null as string | null,
+    decimals: 0, // Token decimals (0-8). 0 = whole numbers (recommended for cubic curve)
     maxSupply: 1000000, // 1 million tokens (0 decimals = whole numbers only)
     projectURL: "",
     targetSupply: 100000, // 100K tokens (cubic curve will reach this slowly)
@@ -135,6 +136,7 @@ export function TokenCreationPage() {
       description: formData.description,
       image: formData.image || undefined,
       imageUrl: formData.imageUrl || undefined,
+      decimals: formData.decimals, // Pass user-specified decimals
       maxSupply: formData.maxSupply,
       projectURL: formData.projectURL,
       targetSupply: formData.targetSupply,
@@ -276,8 +278,10 @@ export function TokenCreationPage() {
               </Button>
               {!showAdvanced && (
                 <p className="text-sm text-blaze-black/50 mt-2 font-mono text-center">
-                  Using smart defaults: 1M max supply, 100K target, 1M APT
-                  liquidity, 0 decimals (whole numbers only - prevents overflow)
+                  Using smart defaults: {formData.decimals} decimals, 1M max
+                  supply, 100K target, 1M APT liquidity
+                  {formData.decimals === 0 && " (safest - whole numbers only)"}
+                  {formData.decimals > 2 && " ⚠️ High overflow risk!"}
                 </p>
               )}
             </div>
@@ -286,9 +290,51 @@ export function TokenCreationPage() {
             {showAdvanced && (
               <div className="space-y-6 pt-4 border-t-2 border-blaze-black/10">
                 <p className="text-sm text-blaze-black/70 font-mono">
-                  ⚠️ Advanced options - tokens use 0 decimals (whole numbers)
-                  due to cubic curve overflow (amount³ formula)
+                  ⚠️ Advanced options - customize with caution
                 </p>
+
+                {/* Decimals */}
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="decimals"
+                    className="text-lg font-bold text-blaze-black"
+                  >
+                    Token Decimals ⚠️
+                  </Label>
+                  <Input
+                    id="decimals"
+                    type="number"
+                    value={formData.decimals}
+                    onChange={(e) =>
+                      handleInputChange("decimals", e.target.value)
+                    }
+                    placeholder="0"
+                    min="0"
+                    max="8"
+                    className="rounded-none border-2 border-blaze-black bg-blaze-white text-blaze-black text-lg"
+                  />
+                  <p className="text-xs text-blaze-black/50 font-mono">
+                    0-8. CRITICAL: 0 = whole numbers (safest, ~10K max buy). 2 =
+                    two decimals (~100 max buy). 4+ = high overflow risk! Higher
+                    decimals = exponentially smaller safe buy amounts due to
+                    cubic curve.
+                  </p>
+                  {formData.decimals > 2 && (
+                    <div className="bg-red-500/10 border-2 border-red-500 p-3 rounded-none">
+                      <p className="text-sm font-bold text-red-600 font-mono">
+                        ⚠️ WARNING: {formData.decimals} decimals will likely
+                        cause overflow!
+                      </p>
+                      <p className="text-xs text-red-600 font-mono mt-1">
+                        Safe max buy ≈{" "}
+                        {Math.floor(
+                          10000 / Math.pow(10, formData.decimals - 0)
+                        )}{" "}
+                        tokens
+                      </p>
+                    </div>
+                  )}
+                </div>
 
                 {/* Max Supply */}
                 <div className="space-y-2">

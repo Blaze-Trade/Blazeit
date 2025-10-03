@@ -14,12 +14,13 @@ interface TokenCreationData {
   description: string;
   image?: File;
   imageUrl?: string;
-  maxSupply?: number; // In human-readable units. Default: 1,000,000,000 (1B tokens)
+  maxSupply?: number; // In human-readable units. Default: 1,000,000 (1M tokens)
   projectURL?: string;
-  targetSupply?: number; // In human-readable units. Default: 10,000,000 (10M tokens)
-  virtualLiquidity?: number; // In APT. Default: 1,000,000 APT - MUST BE VERY HIGH to prevent overflow!
+  targetSupply?: number; // In human-readable units. Default: 100,000 (100K tokens)
+  virtualLiquidity?: number; // In APT. Default: 1,000,000 APT
   curveExponent?: number; // Curve steepness, 2 = quadratic (default: 2)
   maxMintPerAccount?: number; // In human-readable units. 0 = NO LIMIT (default: 0)
+  decimals?: number; // Token decimals (0-8). Default: 0 (recommended for cubic curve). Higher = overflow risk!
 }
 
 interface TokenCreationResult {
@@ -79,11 +80,25 @@ export function useTokenCreation() {
       // - cost = 10^6 / (3 × 10^14) = tiny amount ✅
       //
       // Maximum safe amount: ~10,000 tokens at once (10,000³ = 10^12)
+      const decimals =
+        tokenData.decimals !== undefined ? tokenData.decimals : 0;
+
+      // Warn if using high decimals (overflow risk)
+      if (decimals > 2) {
+        console.warn(
+          `⚠️ Using ${decimals} decimals may cause overflow! With cubic bonding curve:`
+        );
+        console.warn(`- Safe max buy with 0 decimals: ~10,000 tokens`);
+        console.warn(`- Safe max buy with 2 decimals: ~100 tokens`);
+        console.warn(`- Safe max buy with 4 decimals: ~1 token`);
+        console.warn(`- With ${decimals} decimals: overflow very likely!`);
+      }
+
       const createTokenArgs: CreateTokenArguments = {
         maxSupply: tokenData.maxSupply || 1000000, // 1M tokens (human-readable)
         name: tokenData.name,
         symbol: tokenData.symbol,
-        decimal: 0, // NO DECIMALS! Contract's cubic formula requires smallest possible amounts
+        decimal: decimals, // User-specified decimals (0-8). Lower = safer for cubic curve!
         iconURL: tokenData.imageUrl || "",
         projectURL: tokenData.projectURL || "",
         targetSupply: tokenData.targetSupply || 100000, // 100K tokens (human-readable)
@@ -177,7 +192,7 @@ export function useTokenCreation() {
             description: tokenData.description,
             logoUrl: tokenData.imageUrl,
             address: tokenAddress,
-            decimals: 8, // Standard decimals
+            decimals: decimals, // MUST match the on-chain decimal value!
             maxSupply: tokenData.maxSupply,
             creatorWalletAddress: account.address.toString(),
           });
