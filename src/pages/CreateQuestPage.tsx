@@ -6,6 +6,7 @@ import { Separator } from "@/components/ui/separator";
 import { useQuestManagement } from "@/hooks/useQuestManagement";
 import { useQuestStaking } from "@/hooks/useQuestStaking";
 import { useSupabaseQuests } from "@/hooks/useSupabaseQuests";
+import { formatDuration } from "@/lib/utils";
 import { usePortfolioStore } from "@/stores/portfolioStore";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Calculator, Calendar, Clock, Info, Wallet } from "lucide-react";
@@ -25,14 +26,10 @@ const formatDateTimeLocal = (date: Date): string => {
   return `${year}-${month}-${day}T${hours}:${minutes}`;
 };
 
-// Helper function to calculate duration in hours
-const calculateDurationHours = (startTime: Date, endTime: Date): number => {
-  // Calculate total minutes first for better precision
+// Helper function to calculate duration in minutes
+const calculateDurationMinutes = (startTime: Date, endTime: Date): number => {
   const totalMinutes = (endTime.getTime() - startTime.getTime()) / (1000 * 60);
-  const hours = totalMinutes / 60;
-
-  // Round to 2 decimal places for accuracy
-  return Math.round(hours * 100) / 100;
+  return Math.round(totalMinutes);
 };
 
 const questSchema = z
@@ -94,12 +91,12 @@ export function CreateQuestPage() {
 
   const watchedValues = form.watch();
 
-  // Calculate duration automatically
-  const calculatedDuration = useMemo(() => {
+  // Calculate duration automatically in minutes
+  const calculatedDurationMinutes = useMemo(() => {
     if (!watchedValues.startTime || !watchedValues.endTime) return 0;
     const startDate = new Date(watchedValues.startTime);
     const endDate = new Date(watchedValues.endTime);
-    return calculateDurationHours(startDate, endDate);
+    return calculateDurationMinutes(startDate, endDate);
   }, [watchedValues.startTime, watchedValues.endTime]);
 
   // Calculate prize pool automatically (95% of total entry fees from estimated participants)
@@ -109,38 +106,6 @@ export function CreateQuestPage() {
     const totalFees = entryFee * estimatedParticipants;
     return Math.floor(totalFees * 0.95); // 95% goes to prize pool, 5% platform fee
   }, [watchedValues.entryFee]);
-
-  const formatDuration = (hours: number): string => {
-    if (hours <= 0) return "Invalid duration";
-    if (hours < 1) {
-      // Less than 1 hour - show in minutes
-      const minutes = Math.round(hours * 60);
-      return `${minutes} Minute${minutes !== 1 ? "s" : ""}`;
-    } else if (hours < 24) {
-      // Less than 24 hours - show hours and minutes
-      const wholeHours = Math.floor(hours);
-      const minutes = Math.round((hours - wholeHours) * 60);
-      if (minutes === 0) {
-        return `${wholeHours} Hour${wholeHours !== 1 ? "s" : ""}`;
-      }
-      return `${wholeHours}h ${minutes}m`;
-    } else if (hours < 168) {
-      const days = Math.floor(hours / 24);
-      const remainingHours = Math.round(hours % 24);
-      if (remainingHours === 0) {
-        return `${days} Day${days !== 1 ? "s" : ""}`;
-      }
-      return `${days}d ${remainingHours}h`;
-    } else {
-      const weeks = Math.floor(hours / 168);
-      const remainingHours = Math.round(hours % 168);
-      if (remainingHours === 0) {
-        return `${weeks} Week${weeks !== 1 ? "s" : ""}`;
-      }
-      const days = Math.floor(remainingHours / 24);
-      return `${weeks}w ${days}d`;
-    }
-  };
 
   const formatDateTime = (dateTimeString: string): string => {
     if (!dateTimeString) return "Not set";
@@ -273,11 +238,11 @@ export function CreateQuestPage() {
       const supabaseResult = await createQuestSupabase({
         name: values.name,
         description: `A trading quest with ${formatDuration(
-          calculatedDuration
+          calculatedDurationMinutes
         )} duration`,
         entryFee: values.entryFee,
         prizePool: calculatedPrizePool,
-        durationHours: Math.ceil(calculatedDuration), // Convert to integer hours (round up)
+        durationMinutes: calculatedDurationMinutes, // Store duration in minutes
         startTime: startDate,
         endTime: endDate,
         maxParticipants: 100,
@@ -441,7 +406,7 @@ export function CreateQuestPage() {
                       form.formState.isSubmitting ||
                       isCreating ||
                       isBlockchainLoading ||
-                      calculatedDuration <= 0
+                      calculatedDurationMinutes <= 0
                     }
                     className="w-full h-16 rounded-none border-2 border-blaze-black bg-blaze-orange text-blaze-black text-xl font-bold uppercase tracking-wider hover:bg-blaze-black hover:text-blaze-white active:translate-y-px active:translate-x-px disabled:opacity-50 disabled:cursor-not-allowed font-mono shadow-blaze-shadow"
                   >
@@ -525,8 +490,8 @@ export function CreateQuestPage() {
                       Calculated Duration
                     </p>
                     <p className="font-bold text-2xl text-blaze-black">
-                      {calculatedDuration > 0
-                        ? formatDuration(calculatedDuration)
+                      {calculatedDurationMinutes > 0
+                        ? formatDuration(calculatedDurationMinutes)
                         : "Invalid duration"}
                     </p>
                   </div>

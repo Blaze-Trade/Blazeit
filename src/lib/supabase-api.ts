@@ -239,23 +239,92 @@ export const questApi = {
       return { success: false, error: error.message };
     }
 
-    const quests: Quest[] = data.map((quest) => ({
-      id: quest.id,
-      name: quest.name,
-      entryFee: parseFloat(quest.entry_fee),
-      prizePool: parseFloat(quest.prize_pool),
-      duration: `${quest.duration_hours}h`,
-      participants: quest.current_participants,
-      status: quest.status,
-      startTime: quest.start_time,
-      endTime: quest.end_time,
-      blockchainQuestId: quest.blockchain_quest_id, // Include blockchain quest ID
-    }));
+    const quests: Quest[] = data.map((quest) => {
+      // Get duration directly from database, or fallback to calculating from start/end times
+      let durationMinutes = quest.duration_minutes || 0;
 
-    // Sort by status: active, upcoming, ended
+      // If duration_minutes is 0 or invalid, calculate from start/end times as fallback
+      if (!durationMinutes || durationMinutes === 0) {
+        if (quest.start_time && quest.end_time) {
+          const startTime = new Date(quest.start_time);
+          const endTime = new Date(quest.end_time);
+          const diffMs = endTime.getTime() - startTime.getTime();
+          durationMinutes = Math.round(diffMs / (1000 * 60));
+        }
+      }
+
+      // Calculate actual status based on current time (don't trust DB status)
+      let actualStatus: "upcoming" | "active" | "ended" = quest.status;
+      if (quest.start_time && quest.end_time) {
+        const now = new Date();
+        const startTime = new Date(quest.start_time);
+        const endTime = new Date(quest.end_time);
+
+        if (now < startTime) {
+          actualStatus = "upcoming";
+        } else if (now >= startTime && now < endTime) {
+          actualStatus = "active";
+        } else {
+          actualStatus = "ended";
+        }
+      }
+
+      console.log("📊 Mapping quest from DB:", {
+        id: quest.id,
+        name: quest.name,
+        duration_minutes: quest.duration_minutes,
+        start_time: quest.start_time,
+        end_time: quest.end_time,
+        final_durationMinutes: durationMinutes,
+        db_status: quest.status,
+        actual_status: actualStatus,
+      });
+
+      return {
+        id: quest.id,
+        name: quest.name,
+        entryFee: parseFloat(quest.entry_fee),
+        prizePool: parseFloat(quest.prize_pool),
+        duration: "", // Deprecated - use durationMinutes only
+        durationMinutes: durationMinutes, // Convert hours to minutes or calculate from times
+        participants: quest.current_participants,
+        status: actualStatus, // Use calculated status, not DB status
+        startTime: quest.start_time,
+        endTime: quest.end_time,
+        blockchainQuestId: quest.blockchain_quest_id, // Include blockchain quest ID
+      };
+    });
+
+    // Sort quests intelligently:
+    // 1. Active quests first (ending soonest at top)
+    // 2. Upcoming quests (starting soonest at top)
+    // 3. Ended quests last (most recently ended at top)
     const sortedQuests = quests.sort((a, b) => {
       const statusOrder = { active: 0, upcoming: 1, ended: 2 };
-      return statusOrder[a.status] - statusOrder[b.status];
+      const statusDiff = statusOrder[a.status] - statusOrder[b.status];
+
+      // If different status, sort by status priority
+      if (statusDiff !== 0) {
+        return statusDiff;
+      }
+
+      // Same status - sort by time
+      if (a.status === "active") {
+        // Active: show ending soonest first
+        const aEnd = a.endTime ? new Date(a.endTime).getTime() : Infinity;
+        const bEnd = b.endTime ? new Date(b.endTime).getTime() : Infinity;
+        return aEnd - bEnd;
+      } else if (a.status === "upcoming") {
+        // Upcoming: show starting soonest first
+        const aStart = a.startTime ? new Date(a.startTime).getTime() : Infinity;
+        const bStart = b.startTime ? new Date(b.startTime).getTime() : Infinity;
+        return aStart - bStart;
+      } else {
+        // Ended: show most recently ended first
+        const aEnd = a.endTime ? new Date(a.endTime).getTime() : 0;
+        const bEnd = b.endTime ? new Date(b.endTime).getTime() : 0;
+        return bEnd - aEnd;
+      }
     });
 
     return { success: true, data: { items: sortedQuests, next: null } };
@@ -278,12 +347,35 @@ export const questApi = {
       return { success: false, error: "Quest not found" };
     }
 
+    // Get duration directly from database, or fallback to calculating from start/end times
+    let durationMinutes = data.duration_minutes || 0;
+
+    // If duration_minutes is 0 or invalid, calculate from start/end times as fallback
+    if (!durationMinutes || durationMinutes === 0) {
+      if (data.start_time && data.end_time) {
+        const startTime = new Date(data.start_time);
+        const endTime = new Date(data.end_time);
+        const diffMs = endTime.getTime() - startTime.getTime();
+        durationMinutes = Math.round(diffMs / (1000 * 60));
+      }
+    }
+
+    console.log("📊 Mapping single quest from DB:", {
+      id: data.id,
+      name: data.name,
+      duration_minutes: data.duration_minutes,
+      start_time: data.start_time,
+      end_time: data.end_time,
+      final_durationMinutes: durationMinutes,
+    });
+
     const quest: Quest = {
       id: data.id,
       name: data.name,
       entryFee: parseFloat(data.entry_fee),
       prizePool: parseFloat(data.prize_pool),
-      duration: `${data.duration_hours}h`,
+      duration: "", // Deprecated - use durationMinutes only
+      durationMinutes: durationMinutes, // Convert hours to minutes or calculate from times
       participants: data.current_participants,
       status: data.status,
       startTime: data.start_time,
@@ -300,7 +392,7 @@ export const questApi = {
     description?: string;
     entryFee: number;
     prizePool: number;
-    durationHours: number;
+    durationMinutes: number;
     startTime: Date;
     endTime: Date;
     maxParticipants?: number;
@@ -311,6 +403,12 @@ export const questApi = {
     try {
       const user = await createOrGetUser(questData.creatorWalletAddress);
 
+      console.log("💾 Creating quest - input data:", {
+        durationMinutes: questData.durationMinutes,
+        startTime: questData.startTime,
+        endTime: questData.endTime,
+      });
+
       const { data, error } = await supabase
         .from("quests")
         .insert({
@@ -318,7 +416,7 @@ export const questApi = {
           description: questData.description,
           entry_fee: questData.entryFee.toString(),
           prize_pool: questData.prizePool.toString(),
-          duration_hours: questData.durationHours,
+          duration_minutes: questData.durationMinutes,
           start_time: questData.startTime.toISOString(),
           end_time: questData.endTime.toISOString(),
           max_participants: questData.maxParticipants || 100,
@@ -333,12 +431,35 @@ export const questApi = {
         return { success: false, error: error.message };
       }
 
+      // Get duration directly from database, or fallback to calculating from start/end times
+      let durationMinutes = data.duration_minutes || 0;
+
+      // If duration_minutes is 0 or invalid, calculate from start/end times as fallback
+      if (!durationMinutes || durationMinutes === 0) {
+        if (data.start_time && data.end_time) {
+          const startTime = new Date(data.start_time);
+          const endTime = new Date(data.end_time);
+          const diffMs = endTime.getTime() - startTime.getTime();
+          durationMinutes = Math.round(diffMs / (1000 * 60));
+        }
+      }
+
+      console.log("📊 Created quest mapping:", {
+        id: data.id,
+        name: data.name,
+        duration_minutes: data.duration_minutes,
+        start_time: data.start_time,
+        end_time: data.end_time,
+        final_durationMinutes: durationMinutes,
+      });
+
       const quest: Quest = {
         id: data.id,
         name: data.name,
         entryFee: parseFloat(data.entry_fee),
         prizePool: parseFloat(data.prize_pool),
-        duration: `${data.duration_hours}h`,
+        duration: "", // Deprecated - use durationMinutes only
+        durationMinutes: durationMinutes, // Convert hours to minutes or calculate from times
         participants: data.current_participants,
         status: data.status,
         startTime: data.start_time,
@@ -699,7 +820,21 @@ export const questApi = {
         return { success: false, error: participantError.message };
       }
 
-      // Insert portfolio entries
+      // First, delete existing portfolio entries for this quest/user (if resubmitting)
+      const { error: deleteError } = await supabase
+        .from("quest_portfolios")
+        .delete()
+        .eq("quest_id", questId)
+        .eq("user_id", user.id);
+
+      if (deleteError) {
+        console.warn(
+          "Warning: Could not delete existing portfolio entries:",
+          deleteError
+        );
+      }
+
+      // Insert new portfolio entries
       const portfolioEntries = tokenSelections.map((selection) => ({
         quest_id: questId,
         user_id: user.id,

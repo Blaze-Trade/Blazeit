@@ -9,11 +9,14 @@ interface PortfolioState {
   holdings: Holding[];
   watchlist: Token[];
   activeQuest: Quest | null;
-  joinedQuests: string[]; // array of quest IDs
+  joinedQuestsByWallet: Record<string, string[]>; // Map of wallet address -> quest IDs
   // UI state persistence
   sidebarOpen: boolean;
-  theme: 'light' | 'dark';
+  theme: "light" | "dark";
   lastConnectedWallet: string | null;
+
+  // Computed property for current wallet's joined quests
+  get joinedQuests(): string[];
 }
 
 interface PortfolioActions {
@@ -41,10 +44,17 @@ export const usePortfolioStore = create<PortfolioState & PortfolioActions>()(
       holdings: [],
       watchlist: [],
       activeQuest: null,
-      joinedQuests: [],
+      joinedQuestsByWallet: {},
       sidebarOpen: false,
-      theme: 'light',
+      theme: "light",
       lastConnectedWallet: null,
+
+      // Getter for current wallet's joined quests
+      get joinedQuests() {
+        const state = get();
+        if (!state.address) return [];
+        return state.joinedQuestsByWallet[state.address] || [];
+      },
 
       setConnected: (address, walletName) => {
         set((state) => {
@@ -61,9 +71,8 @@ export const usePortfolioStore = create<PortfolioState & PortfolioActions>()(
           state.isConnected = false;
           state.address = null;
           state.activeQuest = null;
-          // Don't clear joinedQuests and watchlist on disconnect to maintain user data
-          // state.joinedQuests = [];
-          // state.watchlist = [];
+          // joinedQuestsByWallet is persisted per-wallet, so no need to clear
+          // watchlist is shared across all wallets
         });
       },
 
@@ -83,7 +92,9 @@ export const usePortfolioStore = create<PortfolioState & PortfolioActions>()(
 
       sellToken: (tokenId, quantity) => {
         set((state) => {
-          const holdingIndex = state.holdings.findIndex((h) => h.id === tokenId);
+          const holdingIndex = state.holdings.findIndex(
+            (h) => h.id === tokenId
+          );
           if (holdingIndex > -1) {
             const holding = state.holdings[holdingIndex];
             const sellQuantity = Math.min(quantity, holding.quantity);
@@ -114,9 +125,18 @@ export const usePortfolioStore = create<PortfolioState & PortfolioActions>()(
 
       joinQuest: (quest) => {
         set((state) => {
-          if (!state.joinedQuests.includes(quest.id)) {
-            state.joinedQuests.push(quest.id);
+          if (!state.address) return;
+
+          // Initialize array for this wallet if it doesn't exist
+          if (!state.joinedQuestsByWallet[state.address]) {
+            state.joinedQuestsByWallet[state.address] = [];
           }
+
+          // Add quest ID if not already present
+          if (!state.joinedQuestsByWallet[state.address].includes(quest.id)) {
+            state.joinedQuestsByWallet[state.address].push(quest.id);
+          }
+
           state.activeQuest = quest;
         });
       },
@@ -145,21 +165,21 @@ export const usePortfolioStore = create<PortfolioState & PortfolioActions>()(
             // to attempt automatic reconnection
             return true;
           } catch (error) {
-            console.error('Failed to reconnect wallet:', error);
+            console.error("Failed to reconnect wallet:", error);
             return false;
           }
         }
         return false;
-      }
+      },
     })),
     {
-      name: 'blaze-it-portfolio-storage',
+      name: "blaze-it-portfolio-storage",
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         // Persist user data and preferences
         holdings: state.holdings,
         watchlist: state.watchlist,
-        joinedQuests: state.joinedQuests,
+        joinedQuestsByWallet: state.joinedQuestsByWallet, // Per-wallet quest tracking
         sidebarOpen: state.sidebarOpen,
         theme: state.theme,
         lastConnectedWallet: state.lastConnectedWallet,

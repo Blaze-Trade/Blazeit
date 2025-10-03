@@ -2,12 +2,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table";
 import { useQuestPNL } from "@/hooks/useQuestPNL";
 import { useQuestStaking } from "@/hooks/useQuestStaking";
@@ -17,12 +17,12 @@ import { formatPNLPercent, getPNLColorClass } from "@/lib/quest-pnl";
 import { usePortfolioStore } from "@/stores/portfolioStore";
 import type { Quest } from "@shared/types";
 import {
-    Calculator,
-    Crown,
-    RefreshCw,
-    Shield,
-    TrendingUp,
-    Users,
+  Calculator,
+  Crown,
+  RefreshCw,
+  Shield,
+  TrendingUp,
+  Users,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -82,7 +82,10 @@ export function AdminQuestPage() {
   };
 
   const handleEndQuest = async (quest: Quest) => {
-    const durationHours = parseInt(quest.duration.replace(/[^\d]/g, "")) || 24;
+    // Calculate duration in hours from durationMinutes
+    const durationHours = quest.durationMinutes
+      ? Math.ceil(quest.durationMinutes / 60)
+      : 24;
     const result = await takeEndSnapshot(quest.id, tokens, durationHours);
     if (result.success) {
       toast.success("Quest ended! Final prices calculated.");
@@ -428,10 +431,18 @@ export function AdminQuestPage() {
                   Admin Instructions:
                 </p>
                 <ul className="space-y-2">
-                  <li>• Click "Start" to begin a quest and snapshot token prices</li>
-                  <li>• Click "End" when quest time is up to calculate final prices</li>
+                  <li>
+                    • Click "Start" to begin a quest and snapshot token prices
+                  </li>
+                  <li>
+                    • Click "End" when quest time is up to calculate final
+                    prices
+                  </li>
                   <li>• Click "Calculate" to generate leaderboard from PNL</li>
-                  <li>• Click "Declare Winner" to send prize to rank #1 on blockchain</li>
+                  <li>
+                    • Click "Declare Winner" to send prize to rank #1 on
+                    blockchain
+                  </li>
                 </ul>
               </div>
             </div>
