@@ -9,6 +9,7 @@ import { useQuestStaking } from "@/hooks/useQuestStaking";
 import { useSupabasePortfolio } from "@/hooks/useSupabasePortfolio";
 import { useSupabaseQuests } from "@/hooks/useSupabaseQuests";
 import { useSupabaseTokens } from "@/hooks/useSupabaseTokens";
+import { formatDuration } from "@/lib/utils";
 import { usePortfolioStore } from "@/stores/portfolioStore";
 import type { Quest, Token } from "@shared/types";
 import { AlertTriangle, ArrowLeft, Check, Minus, Plus } from "lucide-react";
@@ -381,7 +382,11 @@ export function QuestTokenSelection({
                     <p className="text-sm uppercase tracking-wider text-blaze-black/70">
                       Duration
                     </p>
-                    <p className="text-2xl font-bold">{quest.duration}</p>
+                    <p className="text-2xl font-bold">
+                      {quest.durationMinutes && quest.durationMinutes > 0
+                        ? formatDuration(quest.durationMinutes)
+                        : "N/A"}
+                    </p>
                   </div>
                   <div className="border-2 border-blaze-black p-4">
                     <p className="text-sm uppercase tracking-wider text-blaze-black/70">

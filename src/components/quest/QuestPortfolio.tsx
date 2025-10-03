@@ -1,12 +1,17 @@
-import { useEffect, useState, useMemo, useCallback } from 'react';
-import { api } from '@/lib/api-client';
-import { useAptos } from '@/hooks/useAptos';
-import type { QuestPortfolio, Holding } from '@shared/types';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
-import { toast } from 'sonner';
-import { X } from 'lucide-react';
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { supabaseApi } from "@/lib/supabase-api";
+import type { QuestPortfolio } from "@shared/types";
+import { TrendingDown, TrendingUp } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+
 interface QuestPortfolioProps {
   questId: string;
   userId: string;
@@ -14,82 +19,176 @@ interface QuestPortfolioProps {
 export function QuestPortfolio({ questId, userId }: QuestPortfolioProps) {
   const [portfolio, setPortfolio] = useState<QuestPortfolio | null>(null);
   const [loading, setLoading] = useState(true);
-  const { simulateTransaction } = useAptos();
+
   const fetchPortfolio = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await api<QuestPortfolio>(`/api/quests/${questId}/portfolio/${userId}`);
-      setPortfolio(data);
+      const result = await supabaseApi.quests.getQuestPortfolio(
+        questId,
+        userId
+      );
+
+      if (result.success && result.data) {
+        setPortfolio(result.data);
+      } else {
+        setPortfolio(null);
+      }
     } catch (error) {
+      console.error("Failed to fetch portfolio:", error);
       setPortfolio(null);
     } finally {
       setLoading(false);
     }
   }, [questId, userId]);
+
   useEffect(() => {
     fetchPortfolio();
   }, [fetchPortfolio]);
-  const handleSell = async (holding: Holding) => {
-    try {
-      const result = await simulateTransaction(`Selling ${holding.quantity} ${holding.symbol}`);
-      if (!result.success) return;
-      await api(`/api/quests/${questId}/sell`, {
-        method: 'POST',
-        body: JSON.stringify({ userId, tokenId: holding.id, quantity: holding.quantity }),
-      });
-      toast.success(`Sold ${holding.quantity} ${holding.symbol}`);
-      fetchPortfolio();
-    } catch (error) {
-      // Error toast handled by hook
-    }
-  };
   const sortedHoldings = useMemo(() => {
     return portfolio?.holdings.sort((a, b) => b.value - a.value) || [];
   }, [portfolio]);
+
+  const totalPortfolioValue = useMemo(() => {
+    return sortedHoldings.reduce((sum, holding) => sum + holding.value, 0);
+  }, [sortedHoldings]);
+
+  const totalPortfolioCost = useMemo(() => {
+    return sortedHoldings.reduce((sum, holding) => sum + holding.cost, 0);
+  }, [sortedHoldings]);
+
+  const totalPNL = useMemo(() => {
+    return totalPortfolioValue - totalPortfolioCost;
+  }, [totalPortfolioValue, totalPortfolioCost]);
+
+  const totalPNLPercent = useMemo(() => {
+    if (totalPortfolioCost === 0) return 0;
+    return (totalPNL / totalPortfolioCost) * 100;
+  }, [totalPNL, totalPortfolioCost]);
   if (loading) {
-    return <div className="p-6"><Skeleton className="h-48 w-full" /></div>;
+    return (
+      <div className="p-6">
+        <Skeleton className="h-48 w-full" />
+      </div>
+    );
   }
   return (
     <div>
-      <h2 className="font-display text-4xl font-bold p-6 border-b-2 border-blaze-black">Your Portfolio</h2>
+      <h2 className="font-display text-3xl font-bold p-6 border-b-2 border-blaze-black">
+        Your Portfolio
+      </h2>
       {!portfolio || portfolio.holdings.length === 0 ? (
-        <p className="p-6 font-mono text-lg text-center">Your portfolio is empty. Go build it!</p>
+        <div className="p-6 text-center">
+          <p className="font-mono text-lg text-blaze-black/70 mb-4">
+            You haven't selected your portfolio yet.
+          </p>
+          <p className="font-mono text-sm text-blaze-black/50">
+            Click "Build Portfolio" to select your tokens for this quest.
+          </p>
+        </div>
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow className="border-b-2 border-blaze-black hover:bg-blaze-white">
-              <TableHead className="font-mono text-sm uppercase tracking-widest">Asset</TableHead>
-              <TableHead className="text-right font-mono text-sm uppercase tracking-widest">Value</TableHead>
-              <TableHead className="text-right font-mono text-sm uppercase tracking-widest">Sell</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {sortedHoldings.map((holding) => (
-              <TableRow key={holding.symbol} className="border-b-2 border-blaze-black last:border-b-0 font-mono font-bold text-lg hover:bg-blaze-white/50">
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    <img src={holding.logoUrl} alt={holding.name} className="w-8 h-8" />
-                    <div>
-                      <p>{holding.symbol}</p>
-                      <p className="text-sm font-normal text-blaze-black/60">{holding.quantity.toFixed(2)}</p>
-                    </div>
-                  </div>
-                </TableCell>
-                <TableCell className="text-right">${holding.value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                <TableCell className="text-right">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="rounded-none text-blaze-black/50 hover:text-red-600 hover:bg-red-500/10"
-                    onClick={() => handleSell(holding)}
+        <>
+          {/* Portfolio Summary */}
+          <div className="p-6 border-b-2 border-blaze-black bg-blaze-orange/5">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-wider text-blaze-black/70 font-mono font-bold">
+                  Total Value
+                </p>
+                <p className="text-2xl font-bold font-mono">
+                  ${totalPortfolioValue.toFixed(2)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wider text-blaze-black/70 font-mono font-bold">
+                  P&L
+                </p>
+                <div className="flex items-center gap-2">
+                  {totalPNL >= 0 ? (
+                    <TrendingUp className="w-5 h-5 text-green-600" />
+                  ) : (
+                    <TrendingDown className="w-5 h-5 text-red-600" />
+                  )}
+                  <p
+                    className={`text-2xl font-bold font-mono ${
+                      totalPNL >= 0 ? "text-green-600" : "text-red-600"
+                    }`}
                   >
-                    <X className="w-5 h-5" />
-                  </Button>
-                </TableCell>
+                    {totalPNL >= 0 ? "+" : ""}
+                    {totalPNLPercent.toFixed(2)}%
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Holdings Table */}
+          <Table>
+            <TableHeader>
+              <TableRow className="border-b-2 border-blaze-black hover:bg-blaze-white">
+                <TableHead className="font-mono text-sm uppercase tracking-widest">
+                  Token
+                </TableHead>
+                <TableHead className="text-right font-mono text-sm uppercase tracking-widest">
+                  Qty
+                </TableHead>
+                <TableHead className="text-right font-mono text-sm uppercase tracking-widest">
+                  Cost
+                </TableHead>
+                <TableHead className="text-right font-mono text-sm uppercase tracking-widest">
+                  Value
+                </TableHead>
+                <TableHead className="text-right font-mono text-sm uppercase tracking-widest">
+                  P&L
+                </TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {sortedHoldings.map((holding) => {
+                const holdingPNL = holding.value - holding.cost;
+                const holdingPNLPercent = (holdingPNL / holding.cost) * 100;
+                return (
+                  <TableRow
+                    key={holding.id}
+                    className="border-b border-blaze-black/20 last:border-b-0 font-mono hover:bg-blaze-white/50"
+                  >
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <img
+                          src={holding.logoUrl}
+                          alt={holding.name}
+                          className="w-8 h-8"
+                        />
+                        <div>
+                          <p className="font-bold">{holding.symbol}</p>
+                          <p className="text-xs text-blaze-black/60">
+                            {holding.name}
+                          </p>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right font-bold">
+                      {holding.quantity.toFixed(4)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      ${holding.cost.toFixed(2)}
+                    </TableCell>
+                    <TableCell className="text-right font-bold">
+                      ${holding.value.toFixed(2)}
+                    </TableCell>
+                    <TableCell
+                      className={`text-right font-bold ${
+                        holdingPNL >= 0 ? "text-green-600" : "text-red-600"
+                      }`}
+                    >
+                      {holdingPNL >= 0 ? "+" : ""}
+                      {holdingPNLPercent.toFixed(2)}%
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </>
       )}
     </div>
   );

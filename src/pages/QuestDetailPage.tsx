@@ -4,14 +4,22 @@ import { QuestTokenSelection } from "@/components/quest/QuestTokenSelection";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Toaster, toast } from "@/components/ui/sonner";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { useQuestStaking } from "@/hooks/useQuestStaking";
 import { useSupabaseQuests } from "@/hooks/useSupabaseQuests";
 import { supabaseApi } from "@/lib/supabase-api";
-import { cn } from "@/lib/utils";
+import { cn, formatDuration } from "@/lib/utils";
 import { usePortfolioStore } from "@/stores/portfolioStore";
 import type { LeaderboardEntry, Quest } from "@shared/types";
-import { ArrowLeft, Swords } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ArrowLeft, Swords, Users } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 const statusStyles = {
@@ -25,6 +33,7 @@ export function QuestDetailPage() {
   const navigate = useNavigate();
   const [quest, setQuest] = useState<Quest | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [participants, setParticipants] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showTokenSelection, setShowTokenSelection] = useState(false);
@@ -36,12 +45,54 @@ export function QuestDetailPage() {
     joinQuest: joinQuestBlockchain,
     hasUserParticipated,
     getUserParticipation,
+    getQuestParticipants,
   } = useQuestStaking();
 
   const isJoined = questId ? joinedQuests.includes(questId) : false;
 
+  // Calculate actual quest status based on current time
+  const actualQuestStatus = useMemo(() => {
+    if (!quest?.startTime || !quest?.endTime) {
+      return quest?.status || "upcoming";
+    }
+
+    const now = new Date();
+    const startTime = new Date(quest.startTime);
+    const endTime = new Date(quest.endTime);
+
+    if (now < startTime) {
+      return "upcoming" as const;
+    } else if (now >= startTime && now < endTime) {
+      return "active" as const;
+    } else {
+      return "ended" as const;
+    }
+  }, [quest?.startTime, quest?.endTime, quest?.status]);
+
+  // Determine if we should show leaderboard or participants
+  const showLeaderboard = useMemo(() => {
+    // Show leaderboard only if quest has ended AND leaderboard data exists
+    return actualQuestStatus === "ended" && leaderboard.length > 0;
+  }, [actualQuestStatus, leaderboard.length]);
+
+  // Format duration dynamically from durationMinutes only
+  const formattedDuration = useMemo(() => {
+    if (quest) {
+      console.log("QuestDetailPage duration data:", {
+        id: quest.id,
+        name: quest.name,
+        durationMinutes: quest.durationMinutes,
+      });
+    }
+
+    if (quest?.durationMinutes && quest.durationMinutes > 0) {
+      return formatDuration(quest.durationMinutes);
+    }
+    return "N/A";
+  }, [quest]);
+
   // Check if user has already selected their portfolio
-  const checkPortfolioSelection = async () => {
+  const checkPortfolioSelection = useCallback(async () => {
     if (!address || !questId) return;
 
     try {
@@ -72,7 +123,7 @@ export function QuestDetailPage() {
     } catch (error) {
       console.error("Error checking portfolio selection:", error);
     }
-  };
+  }, [address, questId, getUserParticipation]);
 
   useEffect(() => {
     if (!questId) {
@@ -97,6 +148,29 @@ export function QuestDetailPage() {
           if (isJoined && address) {
             await checkPortfolioSelection();
           }
+
+          // Fetch participants from blockchain if quest has blockchain ID
+          if (questResult.data.blockchainQuestId) {
+            console.log(
+              "🔍 Fetching participants for quest ID:",
+              questResult.data.blockchainQuestId
+            );
+            const participantsResult = await getQuestParticipants(
+              questResult.data.blockchainQuestId
+            );
+            console.log("📊 Participants result:", participantsResult);
+            if (participantsResult.success && participantsResult.data) {
+              setParticipants(participantsResult.data);
+              console.log("✅ Set participants:", participantsResult.data);
+            } else {
+              console.warn(
+                "⚠️ No participants data:",
+                participantsResult.error
+              );
+            }
+          } else {
+            console.warn("⚠️ No blockchain quest ID found");
+          }
         } else {
           setError(questResult.error || "Failed to fetch quest details.");
         }
@@ -119,7 +193,13 @@ export function QuestDetailPage() {
     };
 
     fetchQuestData();
-  }, [questId]);
+  }, [
+    questId,
+    getQuestParticipants,
+    isJoined,
+    address,
+    checkPortfolioSelection,
+  ]);
 
   const handleJoinQuest = async () => {
     if (!quest || !isConnected || !address) {
@@ -137,30 +217,57 @@ export function QuestDetailPage() {
         return;
       }
 
-      // Check if user already participated on blockchain
-      if (quest.blockchainQuestId) {
-        const participationCheck = await hasUserParticipated(
-          address,
-          quest.blockchainQuestId
+      // Check database for participation (more reliable than smart contract)
+      console.log("🔍 [QuestDetail] Checking DATABASE for participation");
+      try {
+        const { supabaseApi } = await import("@/lib/supabase-api");
+        const participationCheck = await supabaseApi.quests.getQuestPortfolio(
+          questId,
+          address
         );
 
-        if (participationCheck.hasParticipated) {
+        console.log("📊 [QuestDetail] Database participation check:", {
+          success: participationCheck.success,
+          hasData: !!participationCheck.data,
+        });
+
+        if (participationCheck.success && participationCheck.data) {
+          console.log(
+            "✅ [QuestDetail] User already participated (found in database)"
+          );
           toast.info("You have already joined this quest");
           setShowTokenSelection(true);
           return;
         }
+
+        console.log(
+          "✅ [QuestDetail] No participation found in database - user can join"
+        );
+      } catch (err) {
+        console.warn("⚠️ [QuestDetail] Database check error, continuing:", err);
       }
 
       // Step 1: Join quest on blockchain (pays entry fee automatically)
       let blockchainResult;
       if (quest.blockchainQuestId) {
+        console.log(
+          "🔐 Calling joinQuestBlockchain with ID:",
+          quest.blockchainQuestId
+        );
         // Call join_quest entrypoint - this will prompt wallet for entry fee payment
         blockchainResult = await joinQuestBlockchain(quest.blockchainQuestId);
+        console.log("📝 Blockchain result:", blockchainResult);
 
         if (!blockchainResult.success) {
+          console.error("❌ Blockchain join failed:", blockchainResult.error);
           toast.error("Failed to join quest on blockchain");
           return;
         }
+
+        console.log(
+          "✅ Successfully joined on blockchain, hash:",
+          blockchainResult.hash
+        );
 
         // Step 2: Only save to database AFTER successful blockchain transaction
         const dbResult = await joinQuest(
@@ -172,6 +279,21 @@ export function QuestDetailPage() {
 
         if (dbResult.success) {
           toast.success("Successfully joined the quest!");
+
+          // Refresh participants list after successful join
+          if (quest.blockchainQuestId) {
+            const updatedParticipants = await getQuestParticipants(
+              quest.blockchainQuestId
+            );
+            if (updatedParticipants.success && updatedParticipants.data) {
+              setParticipants(updatedParticipants.data);
+              console.log(
+                "✅ Participants refreshed:",
+                updatedParticipants.data
+              );
+            }
+          }
+
           // Show token selection for portfolio
           setShowTokenSelection(true);
         } else {
@@ -179,6 +301,17 @@ export function QuestDetailPage() {
             "Joined quest on blockchain but failed to save to database. Transaction: " +
               blockchainResult.hash?.slice(0, 10)
           );
+
+          // Still refresh participants since blockchain succeeded
+          if (quest.blockchainQuestId) {
+            const updatedParticipants = await getQuestParticipants(
+              quest.blockchainQuestId
+            );
+            if (updatedParticipants.success && updatedParticipants.data) {
+              setParticipants(updatedParticipants.data);
+            }
+          }
+
           // Still show token selection since blockchain succeeded
           setShowTokenSelection(true);
         }
@@ -250,10 +383,12 @@ export function QuestDetailPage() {
             <div
               className={cn(
                 "text-blaze-white font-mono font-bold uppercase tracking-widest px-3 py-1 text-sm",
-                statusStyles[quest.status]
+                statusStyles[actualQuestStatus]
               )}
             >
-              {quest.status}
+              {actualQuestStatus === "active"
+                ? "In Progress"
+                : actualQuestStatus}
             </div>
           </div>
 
@@ -282,7 +417,7 @@ export function QuestDetailPage() {
               <p className="text-sm uppercase tracking-wider text-blaze-black/70">
                 Duration
               </p>
-              <p className="text-3xl font-bold">{quest.duration}</p>
+              <p className="text-3xl font-bold">{formattedDuration}</p>
             </div>
           </div>
 
@@ -319,7 +454,65 @@ export function QuestDetailPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 shadow-blaze-shadow">
-            <QuestLeaderboard leaderboard={leaderboard} />
+            {showLeaderboard ? (
+              <QuestLeaderboard leaderboard={leaderboard} />
+            ) : (
+              <div className="border-2 border-blaze-black bg-blaze-white">
+                <h2 className="font-display text-4xl font-bold p-6 border-b-2 border-blaze-black flex items-center gap-3">
+                  <Users className="w-8 h-8" />
+                  PARTICIPANTS
+                </h2>
+                {participants.length === 0 ? (
+                  <p className="p-6 font-mono text-lg text-center text-blaze-black/70">
+                    No participants yet. Be the first to join!
+                  </p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-b-2 border-blaze-black hover:bg-blaze-white">
+                        <TableHead className="font-mono text-lg uppercase tracking-widest">
+                          #
+                        </TableHead>
+                        <TableHead className="font-mono text-lg uppercase tracking-widest">
+                          Wallet Address
+                        </TableHead>
+                        <TableHead className="text-right font-mono text-lg uppercase tracking-widest">
+                          Status
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {participants.map((participantAddress, index) => (
+                        <TableRow
+                          key={participantAddress}
+                          className={`border-b-2 border-blaze-black last:border-b-0 font-mono font-bold text-lg hover:bg-blaze-white/50 ${
+                            address === participantAddress
+                              ? "bg-blaze-orange/10"
+                              : ""
+                          }`}
+                        >
+                          <TableCell>{index + 1}</TableCell>
+                          <TableCell className="font-mono">
+                            {participantAddress.slice(0, 10)}...
+                            {participantAddress.slice(-8)}
+                            {address === participantAddress && (
+                              <span className="ml-2 text-xs bg-blaze-orange text-blaze-black px-2 py-1 font-bold">
+                                YOU
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <span className="text-sm text-green-600 font-bold">
+                              ✓ Joined
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </div>
+            )}
           </div>
           {isJoined && address && questId && (
             <div className="border-2 border-blaze-black bg-blaze-white h-fit shadow-blaze-shadow">

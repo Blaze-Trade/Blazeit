@@ -12,15 +12,6 @@ export default defineConfig(() => ({
     rollupOptions: {
       output: {
         sourcemapExcludeSources: false, // Include original source in source maps if sourcemaps are enabled
-        // Split large vendor bundles for better caching
-        manualChunks(id) {
-          if (id.includes("node_modules")) {
-            if (id.includes("@aptos-labs")) return "vendor-aptos";
-            if (id.includes("react")) return "vendor-react";
-            if (id.includes("@radix-ui")) return "vendor-radix";
-            return "vendor";
-          }
-        },
       },
     },
   },
@@ -29,7 +20,7 @@ export default defineConfig(() => ({
     devSourcemap: true,
   },
   server: {
-    allowedHosts: true,
+    allowedHosts: ["*"],
   },
   resolve: {
     alias: {

@@ -319,6 +319,16 @@ export function useQuestStaking() {
   const hasUserParticipated = useCallback(
     async (userAddress: string, questId: number) => {
       try {
+        console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        console.log("🔍 [useQuestStaking] Checking participation:");
+        console.log(
+          "   Function:",
+          `${QUEST_MODULE_ADDRESS}::quest_staking::has_user_participated`
+        );
+        console.log("   User Address:", userAddress);
+        console.log("   Quest ID:", questId);
+        console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
         const client = await getAptosClient();
         const result = await client.view({
           payload: {
@@ -328,9 +338,20 @@ export function useQuestStaking() {
           },
         });
 
+        console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        console.log("📊 [useQuestStaking] Participation check raw result:");
+        console.log("   Full result:", result);
+        console.log("   result[0]:", result[0]);
+        console.log("   Type:", typeof result[0]);
+        console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
         return { success: true, hasParticipated: result[0] as boolean };
       } catch (error: any) {
-        console.error("Error checking participation:", error);
+        console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        console.error("❌ [useQuestStaking] Error checking participation:");
+        console.error("   Error:", error);
+        console.error("   Message:", error.message);
+        console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
         return { success: false, hasParticipated: false };
       }
     },
@@ -364,6 +385,15 @@ export function useQuestStaking() {
    */
   const getQuestParticipants = useCallback(async (questId: number) => {
     try {
+      console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+      console.log("👥 [useQuestStaking] Fetching participants:");
+      console.log(
+        "   Function:",
+        `${QUEST_MODULE_ADDRESS}::quest_staking::get_quest_participants`
+      );
+      console.log("   Quest ID:", questId);
+      console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
       const client = await getAptosClient();
       const result = await client.view({
         payload: {
@@ -373,10 +403,22 @@ export function useQuestStaking() {
         },
       });
 
-      console.log("Quest participants:", result);
+      console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+      console.log("👥 [useQuestStaking] Participants result:");
+      console.log("   Full result:", result);
+      console.log("   result[0]:", result[0]);
+      console.log("   Type:", typeof result[0]);
+      console.log("   Is Array:", Array.isArray(result[0]));
+      console.log("   Length:", result[0]?.length);
+      console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
       return { success: true, data: result[0] as string[] };
     } catch (error: any) {
-      console.error("Error fetching quest participants:", error);
+      console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+      console.error("❌ [useQuestStaking] Error fetching participants:");
+      console.error("   Error:", error);
+      console.error("   Message:", error.message);
+      console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
       return { success: false, error: error.message, data: [] };
     }
   }, []);

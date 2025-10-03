@@ -36,7 +36,7 @@ export function useSupabaseQuests() {
     description?: string;
     entryFee: number;
     prizePool: number;
-    durationHours: number;
+    durationMinutes: number;
     startTime: Date;
     endTime: Date;
     maxParticipants?: number;

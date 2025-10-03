@@ -19,7 +19,8 @@ export interface Quest {
   name: string;
   entryFee: number;
   prizePool: number;
-  duration: string;
+  duration: string; // Formatted duration string (e.g., "2 Hours", "3 Days") - for display
+  durationMinutes?: number; // Duration in minutes (for calculations)
   participants: number;
   status: "upcoming" | "active" | "ended";
   startTime?: string; // ISO string
