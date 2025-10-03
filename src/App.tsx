@@ -93,7 +93,7 @@ function App() {
   }
 
   return (
-    <AptosWalletAdapterProvider plugins={wallets} autoConnect={false}>
+    <AptosWalletAdapterProvider plugins={wallets} autoConnect={true}>
       <ErrorBoundary>
         <RouterProvider router={router} />
       </ErrorBoundary>
