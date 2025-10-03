@@ -1,0 +1,108 @@
+# Multi-stage build for production optimization
+FROM node:18-alpine AS builder
+
+# Install build dependencies for native modules
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    gcc \
+    libc-dev \
+    linux-headers \
+    eudev-dev \
+    libusb-dev
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# install bun and serve
+RUN npm install -g bun serve
+
+# Install all dependencies (including dev dependencies for build)
+RUN bun install
+
+ARG PORT
+ARG PROJECT_NAME
+ARG VITE_APP_NETWORK
+ARG VITE_MODULE_ADDRESS
+ARG VITE_APTOS_NETWORK
+ARG VITE_CONTRACT_ADDRESS
+ARG VITE_API_BASE_URL
+ARG VITE_SUPABASE_URL
+ARG VITE_SUPABASE_ANON_KEY
+ARG VITE_SUPABASE_STORAGE_BUCKET
+ARG VITE_QUEST_MODULE_ADDRESS
+
+ENV PORT=$PORT
+ENV PROJECT_NAME=$PROJECT_NAME
+ENV VITE_APP_NETWORK=$VITE_APP_NETWORK
+ENV VITE_MODULE_ADDRESS=$VITE_MODULE_ADDRESS
+ENV VITE_APTOS_NETWORK=$VITE_APTOS_NETWORK
+ENV VITE_CONTRACT_ADDRESS=$VITE_CONTRACT_ADDRESS
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
+ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
+ENV VITE_SUPABASE_STORAGE_BUCKET=$VITE_SUPABASE_STORAGE_BUCKET
+ENV VITE_QUEST_MODULE_ADDRESS=$VITE_QUEST_MODULE_ADDRESS
+
+# Copy source code
+COPY . .
+
+
+RUN bun run build
+
+# # Production stage
+# FROM node:18-alpine AS production
+
+# # Install serve for serving static files and runtime dependencies
+# RUN apk add --no-cache wget && \
+#     npm install -g serve && \
+#     npm install -g bun
+
+# Set working directory
+WORKDIR /app
+
+# # Copy built application from builder stage
+# COPY --from=builder /app/dist ./dist
+
+# # Copy package.json for serve command
+# COPY --from=builder /app/package.json ./package.json
+
+# Create non-root user for security
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S nextjs -u 1001
+
+# Change ownership of the app directory
+RUN chown -R nextjs:nodejs /app
+USER nextjs
+
+# Expose port
+EXPOSE $PORT
+
+# Set environment variables
+ENV NODE_ENV=production
+ENV PORT=$PORT
+
+## save .env file using echo command
+RUN echo "PROJECT_NAME=$PROJECT_NAME" > .env
+RUN echo "VITE_APP_NETWORK=$VITE_APP_NETWORK" >> .env
+RUN echo "VITE_MODULE_ADDRESS=$VITE_MODULE_ADDRESS" >> .env
+RUN echo "VITE_APTOS_NETWORK=$VITE_APTOS_NETWORK" >> .env
+RUN echo "VITE_CONTRACT_ADDRESS=$VITE_CONTRACT_ADDRESS" >> .env
+RUN echo "VITE_API_BASE_URL=$VITE_API_BASE_URL" >> .env
+RUN echo "VITE_SUPABASE_URL=$VITE_SUPABASE_URL" >> .env
+RUN echo "VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY" >> .env
+RUN echo "VITE_SUPABASE_STORAGE_BUCKET=$VITE_SUPABASE_STORAGE_BUCKET" >> .env
+RUN echo "VITE_QUEST_MODULE_ADDRESS=$VITE_QUEST_MODULE_ADDRESS" >> .env
+
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT:-3007} || exit 1
+
+# Start the application
+# CMD ["serve", "-s", "dist", "-l", "3007"]
+CMD ["bun", "run", "start"]
