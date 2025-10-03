@@ -19,6 +19,7 @@ export function TokenCreationPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   // Form state - optimized for smart contract's hardcoded cubic bonding curve
   // IMPORTANT: Contract uses cubic formula (amount³) which overflows with large amounts
@@ -75,6 +76,10 @@ export function TokenCreationPage() {
       return;
     }
 
+    await handleFileValidationAndUpload(file);
+  };
+
+  const handleFileValidationAndUpload = async (file: File) => {
     // Validate file size (10MB max)
     if (file.size > 10 * 1024 * 1024) {
       toast.error("File size must be less than 10MB");
@@ -101,8 +106,7 @@ export function TokenCreationPage() {
       toast.success("Image uploaded successfully!", { id: toastId });
 
       // Update form data with the server URL (replacing preview URL)
-      const newFormData = { ...formData, image: file, imageUrl };
-      setFormData(newFormData);
+      setFormData((prev) => ({ ...prev, image: file, imageUrl }));
 
       // Clean up the preview URL after successful upload
       URL.revokeObjectURL(previewUrl);
@@ -116,6 +120,41 @@ export function TokenCreationPage() {
       URL.revokeObjectURL(previewUrl);
     } finally {
       setIsUploadingImage(false);
+    }
+  };
+
+  const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isUploadingImage) {
+      setIsDragging(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    if (isUploadingImage) {
+      return;
+    }
+
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      const file = files[0];
+      await handleFileValidationAndUpload(file);
     }
   };
 
@@ -480,10 +519,16 @@ export function TokenCreationPage() {
                 onClick={() =>
                   !isUploadingImage && fileInputRef.current?.click()
                 }
-                className={`border-2 border-dashed border-blaze-black bg-blaze-white hover:bg-blaze-orange/20 transition-colors p-8 text-center rounded-none ${
+                onDragEnter={handleDragEnter}
+                onDragLeave={handleDragLeave}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
+                className={`border-2 border-dashed border-blaze-black transition-colors p-8 text-center rounded-none ${
                   isUploadingImage
-                    ? "cursor-not-allowed opacity-50"
-                    : "cursor-pointer"
+                    ? "cursor-not-allowed opacity-50 bg-blaze-white"
+                    : isDragging
+                    ? "cursor-pointer bg-blaze-orange/40 border-blaze-orange"
+                    : "cursor-pointer bg-blaze-white hover:bg-blaze-orange/20"
                 }`}
               >
                 <input
@@ -498,6 +543,8 @@ export function TokenCreationPage() {
                 <p className="text-blaze-black font-mono text-lg mb-2">
                   {isUploadingImage
                     ? "Uploading..."
+                    : isDragging
+                    ? "Drop image here"
                     : "Drop image or click to browse"}
                 </p>
                 <p className="text-blaze-black/70 font-mono text-sm">
