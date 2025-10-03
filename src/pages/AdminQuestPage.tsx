@@ -104,15 +104,25 @@ export function AdminQuestPage() {
 
     const winner = leaderboard[0];
     const confirmed = window.confirm(
-      `Declare ${winner.walletAddress} as winner?\n\nThey will receive the prize pool of $${quest.prizePool.toLocaleString()}`
+      `Declare ${
+        winner.walletAddress
+      } as winner?\n\nThey will receive the prize pool of $${quest.prizePool.toLocaleString()}`
     );
 
     if (!confirmed) return;
 
-    const result = await declareWinner(parseInt(quest.id), winner.walletAddress);
+    // Declare winner on blockchain
+    if (quest.blockchainQuestId) {
+      const result = await declareWinner(
+        quest.blockchainQuestId,
+        winner.walletAddress
+      );
 
-    if (result.success) {
-      toast.success("Winner declared successfully on blockchain!");
+      if (result.success) {
+        toast.success("Winner declared successfully on blockchain!");
+      }
+    } else {
+      toast.error("Quest not properly configured for blockchain operations");
     }
   };
 

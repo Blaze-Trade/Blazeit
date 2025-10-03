@@ -34,7 +34,8 @@ export function QuestTokenSelection({
   const navigate = useNavigate();
   const { transferAPT } = useAptos();
   const { address, joinQuest } = usePortfolioStore();
-  const { joinQuest: joinQuestSupabase } = useSupabaseQuests();
+  const { joinQuest: joinQuestSupabase, submitQuestPortfolio } =
+    useSupabaseQuests();
   const { buyToken: buyTokenSupabase } = useSupabasePortfolio(address);
   const { selectPortfolio: selectPortfolioBlockchain, aptToOctas } =
     useQuestStaking();
@@ -73,9 +74,9 @@ export function QuestTokenSelection({
       return;
     }
 
-    // Enforce exactly 5 tokens
+    // Enforce maximum 5 tokens (as per smart contract)
     if (selectedTokens.length >= 5) {
-      toast.error("You can only select exactly 5 tokens for the quest");
+      toast.error("You can select up to 5 tokens for the quest");
       return;
     }
 
@@ -128,8 +129,8 @@ export function QuestTokenSelection({
   const totalWithFees = totalInvestment + quest.entryFee;
 
   const handleConfirmSelection = () => {
-    if (selectedTokens.length !== 5) {
-      toast.error("You must select exactly 5 tokens for the quest");
+    if (selectedTokens.length < 1 || selectedTokens.length > 5) {
+      toast.error("You must select between 1 and 5 tokens for the quest");
       return;
     }
     setShowConfirmation(true);
@@ -141,38 +142,96 @@ export function QuestTokenSelection({
       return;
     }
 
-    // Validate exactly 5 tokens
-    if (selectedTokens.length !== 5) {
-      toast.error("You must select exactly 5 tokens");
+    // Validate portfolio size (1-5 tokens as per smart contract)
+    if (selectedTokens.length < 1 || selectedTokens.length > 5) {
+      toast.error("You must select between 1 and 5 tokens");
       return;
     }
 
     setConfirming(true);
     try {
       // Extract token addresses and investment amounts
-      const tokenAddresses = selectedTokens.map(
-        (s) => s.token.address || s.token.id
-      );
+      const tokenAddresses = selectedTokens.map((s) => {
+        let address = s.token.address || s.token.id;
+
+        // Validate that we have an address
+        if (!address) {
+          throw new Error(`No address found for token ${s.token.symbol}`);
+        }
+
+        // Ensure the address is properly formatted for Aptos (64 characters)
+        if (address.startsWith("0x")) {
+          // Remove 0x prefix and pad to 64 characters
+          const hexPart = address.slice(2);
+          const paddedHex = hexPart.padStart(64, "0");
+          address = `0x${paddedHex}`;
+        } else {
+          // If no 0x prefix, add it and pad
+          const paddedHex = address.padStart(64, "0");
+          address = `0x${paddedHex}`;
+        }
+
+        // Validate final address length
+        if (address.length !== 66) {
+          // 0x + 64 hex chars
+          throw new Error(
+            `Invalid address format for token ${s.token.symbol}: ${address}`
+          );
+        }
+
+        console.log(
+          `Original address: ${
+            s.token.address || s.token.id
+          }, Formatted: ${address}`
+        );
+        return address;
+      });
       const amountsAPT = selectedTokens.map((s) => s.investmentAmount);
 
       // Step 1: Submit portfolio to blockchain
-      const portfolioResult = await selectPortfolioBlockchain({
-        questId: parseInt(quest.id), // Assuming quest.id is the blockchain quest ID
-        tokenAddresses,
-        amountsAPT,
-      });
+      let portfolioResult;
+      if (quest.blockchainQuestId) {
+        // Convert APT amounts to USDC amounts (6 decimals) for the smart contract
+        // For MVP, we'll use 1 APT = 10 USDC conversion
+        const amountsUSDC = amountsAPT.map(
+          (apt) => Math.floor(apt * 10 * 1000000).toString() // *10 for APT->USD, *1000000 for 6 decimals
+        );
 
-      if (!portfolioResult.success) {
-        toast.error("Failed to submit portfolio to blockchain");
+        // Call select_portfolio entrypoint with token addresses and USDC amounts
+        portfolioResult = await selectPortfolioBlockchain({
+          questId: quest.blockchainQuestId,
+          tokenAddresses,
+          amountsUSDC,
+        });
+
+        if (!portfolioResult.success) {
+          toast.error("Failed to submit portfolio to blockchain");
+          return;
+        }
+      } else {
+        toast.error("Quest not properly configured for blockchain operations");
         return;
       }
 
       // Store transaction hash
       setTransactionHash(portfolioResult.hash || "");
 
-      // Step 2: Save portfolio to Supabase database
-      const joinResult = await joinQuestSupabase(quest.id, address);
-      if (joinResult.success) {
+      // Step 2: Save portfolio to Supabase database using quest_portfolios table
+      const tokenSelections = selectedTokens.map((selection) => ({
+        tokenId: selection.token.id,
+        quantity: selection.quantity,
+        entryPrice: selection.token.price,
+        totalCost: selection.investmentAmount,
+      }));
+
+      const portfolioResult_db = await submitQuestPortfolio(
+        quest.id,
+        address,
+        tokenSelections,
+        portfolioResult.hash
+      );
+
+      if (portfolioResult_db.success) {
         // Add to local state
         joinQuest(quest);
 
@@ -188,7 +247,10 @@ export function QuestTokenSelection({
           "Portfolio submitted to blockchain but failed to save to database. Transaction: " +
             portfolioResult.hash?.slice(0, 10)
         );
-        console.error("Failed to join quest in database:", joinResult.error);
+        console.error(
+          "Failed to save portfolio to database:",
+          portfolioResult_db.error
+        );
       }
     } catch (error) {
       console.error("Transaction error:", error);
@@ -513,7 +575,7 @@ export function QuestTokenSelection({
               <CardContent className="p-6 space-y-4">
                 {selectedTokens.length === 0 ? (
                   <p className="text-center text-blaze-black/70 py-8">
-                    Select exactly 5 tokens to build your quest portfolio
+                    Select 1-5 tokens to build your quest portfolio
                   </p>
                 ) : (
                   <>

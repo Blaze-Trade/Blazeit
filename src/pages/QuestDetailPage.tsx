@@ -28,13 +28,51 @@ export function QuestDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showTokenSelection, setShowTokenSelection] = useState(false);
+  const [hasSelectedPortfolio, setHasSelectedPortfolio] = useState(false);
   const { isConnected, address, joinedQuests, setActiveQuest } =
     usePortfolioStore();
   const { joinQuest } = useSupabaseQuests();
-  const { joinQuest: joinQuestBlockchain, hasUserParticipated } =
-    useQuestStaking();
+  const {
+    joinQuest: joinQuestBlockchain,
+    hasUserParticipated,
+    getUserParticipation,
+  } = useQuestStaking();
 
   const isJoined = questId ? joinedQuests.includes(questId) : false;
+
+  // Check if user has already selected their portfolio
+  const checkPortfolioSelection = async () => {
+    if (!address || !questId) return;
+
+    try {
+      // First check Supabase for portfolio data
+      const portfolioResult = await supabaseApi.quests.getQuestPortfolio(
+        questId,
+        address
+      );
+      if (
+        portfolioResult.success &&
+        portfolioResult.data &&
+        portfolioResult.data.holdings.length > 0
+      ) {
+        setHasSelectedPortfolio(true);
+        return;
+      }
+
+      // If no Supabase portfolio, check blockchain participation
+      const participation = await getUserParticipation(
+        address,
+        parseInt(questId)
+      );
+      if (participation.success && participation.data) {
+        // Check if user has selected portfolio (assuming the data structure includes portfolio info)
+        // This logic might need to be updated based on the actual contract structure
+        setHasSelectedPortfolio(true);
+      }
+    } catch (error) {
+      console.error("Error checking portfolio selection:", error);
+    }
+  };
 
   useEffect(() => {
     if (!questId) {
@@ -55,6 +93,10 @@ export function QuestDetailPage() {
 
         if (questResult.success && questResult.data) {
           setQuest(questResult.data);
+          // Check if user has already selected their portfolio
+          if (isJoined && address) {
+            await checkPortfolioSelection();
+          }
         } else {
           setError(questResult.error || "Failed to fetch quest details.");
         }
@@ -96,39 +138,53 @@ export function QuestDetailPage() {
       }
 
       // Check if user already participated on blockchain
-      const participationCheck = await hasUserParticipated(
-        address,
-        parseInt(quest.id)
-      );
-
-      if (participationCheck.hasParticipated) {
-        toast.info("You have already joined this quest");
-        setShowTokenSelection(true);
-        return;
-      }
-
-      // Step 1: Join quest on blockchain (pays entry fee)
-      const blockchainResult = await joinQuestBlockchain(parseInt(quest.id));
-
-      if (!blockchainResult.success) {
-        toast.error("Failed to join quest on blockchain");
-        return;
-      }
-
-      // Step 2: Save to Supabase database
-      const dbResult = await joinQuest(quest.id, address);
-
-      if (dbResult.success) {
-        toast.success("Successfully joined the quest!");
-        // Show token selection for portfolio
-        setShowTokenSelection(true);
-      } else {
-        toast.warning(
-          "Joined quest on blockchain but failed to save to database. Transaction: " +
-            blockchainResult.hash?.slice(0, 10)
+      if (quest.blockchainQuestId) {
+        const participationCheck = await hasUserParticipated(
+          address,
+          quest.blockchainQuestId
         );
-        // Still show token selection since blockchain succeeded
-        setShowTokenSelection(true);
+
+        if (participationCheck.hasParticipated) {
+          toast.info("You have already joined this quest");
+          setShowTokenSelection(true);
+          return;
+        }
+      }
+
+      // Step 1: Join quest on blockchain (pays entry fee automatically)
+      let blockchainResult;
+      if (quest.blockchainQuestId) {
+        // Call join_quest entrypoint - this will prompt wallet for entry fee payment
+        blockchainResult = await joinQuestBlockchain(quest.blockchainQuestId);
+
+        if (!blockchainResult.success) {
+          toast.error("Failed to join quest on blockchain");
+          return;
+        }
+
+        // Step 2: Only save to database AFTER successful blockchain transaction
+        const dbResult = await joinQuest(
+          quest.id,
+          address,
+          quest.entryFee,
+          quest.creatorWalletAddress
+        );
+
+        if (dbResult.success) {
+          toast.success("Successfully joined the quest!");
+          // Show token selection for portfolio
+          setShowTokenSelection(true);
+        } else {
+          toast.warning(
+            "Joined quest on blockchain but failed to save to database. Transaction: " +
+              blockchainResult.hash?.slice(0, 10)
+          );
+          // Still show token selection since blockchain succeeded
+          setShowTokenSelection(true);
+        }
+      } else {
+        toast.error("Quest not properly configured for blockchain operations");
+        return;
       }
     } catch (error: any) {
       toast.error("Failed to join quest");
@@ -139,7 +195,7 @@ export function QuestDetailPage() {
   const handleBuildPortfolio = () => {
     if (quest) {
       setActiveQuest(quest);
-      navigate("/");
+      setShowTokenSelection(true);
     }
   };
 
@@ -163,7 +219,13 @@ export function QuestDetailPage() {
     return (
       <QuestTokenSelection
         quest={quest}
-        onBack={() => setShowTokenSelection(false)}
+        onBack={() => {
+          setShowTokenSelection(false);
+          // Refresh portfolio selection status when returning
+          if (isJoined && address) {
+            checkPortfolioSelection();
+          }
+        }}
       />
     );
   }
@@ -234,13 +296,24 @@ export function QuestDetailPage() {
             </Button>
           )}
 
-          {isJoined && quest.status === "active" && (
+          {isJoined && !hasSelectedPortfolio && quest.status === "active" && (
             <Button
               onClick={handleBuildPortfolio}
               className="w-full h-14 rounded-none border-2 border-blaze-black bg-blaze-black text-blaze-white text-xl font-bold uppercase tracking-wider hover:bg-blaze-orange hover:text-blaze-black active:translate-y-px active:translate-x-px"
             >
-              <Swords className="mr-2" /> Build Portfolio
+              <Swords className="mr-2" /> Select Portfolio Tokens
             </Button>
+          )}
+
+          {isJoined && hasSelectedPortfolio && quest.status === "active" && (
+            <div className="text-center p-4 border-2 border-blaze-black bg-blaze-orange/10">
+              <p className="text-blaze-black font-bold text-lg">
+                ✅ Portfolio Selected
+              </p>
+              <p className="text-blaze-black/70 text-sm mt-1">
+                Your portfolio has been submitted for this quest
+              </p>
+            </div>
           )}
         </div>
 

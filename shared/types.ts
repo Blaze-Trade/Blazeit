@@ -26,6 +26,7 @@ export interface Quest {
   endTime?: string; // ISO string
   creatorId?: string; // Quest creator's user ID
   creatorWalletAddress?: string; // Quest creator's wallet address (fetched from users table)
+  blockchainQuestId?: number; // Numeric quest ID from blockchain (for blockchain operations)
 }
 export interface LeaderboardEntry {
   rank: number;

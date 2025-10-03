@@ -4,8 +4,8 @@ import type {
   LeaderboardEntry,
   Quest,
   QuestPortfolio,
-  Token
-} from '@shared/types';
+  Token,
+} from "@shared/types";
 import { supabase } from './supabase';
 
 // Database types (matching our Supabase schema)
@@ -109,6 +109,40 @@ const createOrGetUser = async (walletAddress: string): Promise<User> => {
   return user;
 };
 
+// Helper function to format Aptos addresses to proper 64-character format
+const formatAptosAddress = (address: string | null | undefined): string | undefined => {
+  if (!address) return undefined;
+
+  // If it's already a proper Aptos address (66 chars with 0x prefix), return as is
+  if (address.startsWith('0x') && address.length === 66) {
+    return address;
+  }
+
+  // If it's a resource format (like 0x1::aptos_coin::AptosCoin), convert to proper address
+  if (address.includes('::')) {
+    // For mock tokens, use predefined addresses
+    const resourceMap: Record<string, string> = {
+      '0x1::aptos_coin::AptosCoin': '0x0000000000000000000000000000000000000000000000000000000000000001',
+      '0x1::sui::Sui': '0x0000000000000000000000000000000000000000000000000000000000000002',
+      '0x1::bitcoin::Bitcoin': '0x0000000000000000000000000000000000000000000000000000000000000003',
+      '0x1::ethereum::Ethereum': '0x0000000000000000000000000000000000000000000000000000000000000004',
+      '0x1::solana::Solana': '0x0000000000000000000000000000000000000000000000000000000000000005',
+    };
+    return resourceMap[address] || address;
+  }
+
+  // If it's a hex string but not 64 chars, pad it
+  if (address.startsWith('0x')) {
+    const hexPart = address.slice(2);
+    const paddedHex = hexPart.padStart(64, '0');
+    return `0x${paddedHex}`;
+  }
+
+  // If it's a hex string without 0x prefix, add prefix and pad
+  const paddedHex = address.padStart(64, '0');
+  return `0x${paddedHex}`;
+};
+
 // TOKEN API
 export const tokenApi = {
   // Get all tokens
@@ -123,15 +157,15 @@ export const tokenApi = {
       return { success: false, error: error.message };
     }
 
-    const tokens: Token[] = data.map(token => ({
+    const tokens: Token[] = data.map((token) => ({
       id: token.id,
       symbol: token.symbol,
       name: token.name,
       price: parseFloat(token.price),
       change24h: parseFloat(token.change_24h),
       marketCap: parseFloat(token.market_cap),
-      logoUrl: token.logo_url || '',
-      address: token.address,
+      logoUrl: token.logo_url || "",
+      address: formatAptosAddress(token.address),
       decimals: token.decimals,
     }));
 
@@ -188,20 +222,24 @@ export const tokenApi = {
 // QUEST API
 export const questApi = {
   // Get all quests
-  async getQuests(): Promise<ApiResponse<{ items: Quest[]; next: string | null }>> {
+  async getQuests(): Promise<
+    ApiResponse<{ items: Quest[]; next: string | null }>
+  > {
     const { data, error } = await supabase
-      .from('quests')
-      .select(`
+      .from("quests")
+      .select(
+        `
         *,
         creator:users!quests_creator_id_fkey(username, wallet_address)
-      `)
-      .order('start_time', { ascending: true });
+      `
+      )
+      .order("start_time", { ascending: true });
 
     if (error) {
       return { success: false, error: error.message };
     }
 
-    const quests: Quest[] = data.map(quest => ({
+    const quests: Quest[] = data.map((quest) => ({
       id: quest.id,
       name: quest.name,
       entryFee: parseFloat(quest.entry_fee),
@@ -211,6 +249,7 @@ export const questApi = {
       status: quest.status,
       startTime: quest.start_time,
       endTime: quest.end_time,
+      blockchainQuestId: quest.blockchain_quest_id, // Include blockchain quest ID
     }));
 
     // Sort by status: active, upcoming, ended
@@ -225,16 +264,18 @@ export const questApi = {
   // Get quest by ID
   async getQuest(questId: string): Promise<ApiResponse<Quest>> {
     const { data, error } = await supabase
-      .from('quests')
-      .select(`
+      .from("quests")
+      .select(
+        `
         *,
         creator:users!quests_creator_id_fkey(username, wallet_address)
-      `)
-      .eq('id', questId)
+      `
+      )
+      .eq("id", questId)
       .single();
 
     if (error) {
-      return { success: false, error: 'Quest not found' };
+      return { success: false, error: "Quest not found" };
     }
 
     const quest: Quest = {
@@ -247,6 +288,7 @@ export const questApi = {
       status: data.status,
       startTime: data.start_time,
       endTime: data.end_time,
+      blockchainQuestId: data.blockchain_quest_id, // Include blockchain quest ID
     };
 
     return { success: true, data: quest };
@@ -263,12 +305,14 @@ export const questApi = {
     endTime: Date;
     maxParticipants?: number;
     creatorWalletAddress: string;
+    blockchainQuestId?: number;
+    blockchainTxHash?: string;
   }): Promise<ApiResponse<Quest>> {
     try {
       const user = await createOrGetUser(questData.creatorWalletAddress);
 
       const { data, error } = await supabase
-        .from('quests')
+        .from("quests")
         .insert({
           name: questData.name,
           description: questData.description,
@@ -279,6 +323,8 @@ export const questApi = {
           end_time: questData.endTime.toISOString(),
           max_participants: questData.maxParticipants || 100,
           creator_id: user.id,
+          blockchain_quest_id: questData.blockchainQuestId, // Store blockchain quest ID
+          blockchain_tx_hash: questData.blockchainTxHash, // Store transaction hash
         })
         .select()
         .single();
@@ -297,6 +343,7 @@ export const questApi = {
         status: data.status,
         startTime: data.start_time,
         endTime: data.end_time,
+        blockchainQuestId: data.blockchain_quest_id, // Include blockchain quest ID
       };
 
       return { success: true, data: quest };
@@ -306,7 +353,10 @@ export const questApi = {
   },
 
   // Join quest
-  async joinQuest(questId: string, walletAddress: string): Promise<ApiResponse<QuestPortfolio>> {
+  async joinQuest(
+    questId: string,
+    walletAddress: string
+  ): Promise<ApiResponse<QuestPortfolio>> {
     try {
       const user = await createOrGetUser(walletAddress);
 
@@ -413,34 +463,39 @@ export const questApi = {
   },
 
   // Get quest portfolio
-  async getQuestPortfolio(questId: string, walletAddress: string): Promise<ApiResponse<QuestPortfolio>> {
+  async getQuestPortfolio(
+    questId: string,
+    walletAddress: string
+  ): Promise<ApiResponse<QuestPortfolio>> {
     try {
       const user = await getUserByWallet(walletAddress);
       if (!user) {
-        return { success: false, error: 'User not found' };
+        return { success: false, error: "User not found" };
       }
 
       const { data: portfolioData, error } = await supabase
-        .from('quest_portfolios')
-        .select(`
+        .from("quest_portfolios")
+        .select(
+          `
           *,
           token:tokens(*)
-        `)
-        .eq('quest_id', questId)
-        .eq('user_id', user.id);
+        `
+        )
+        .eq("quest_id", questId)
+        .eq("user_id", user.id);
 
       if (error) {
         return { success: false, error: error.message };
       }
 
-      const holdings: Holding[] = portfolioData.map(holding => ({
+      const holdings: Holding[] = portfolioData.map((holding) => ({
         id: holding.token.id,
         symbol: holding.token.symbol,
         name: holding.token.name,
         price: parseFloat(holding.token.price),
         change24h: parseFloat(holding.token.change_24h),
         marketCap: parseFloat(holding.token.market_cap),
-        logoUrl: holding.token.logo_url || '',
+        logoUrl: holding.token.logo_url || "",
         address: holding.token.address,
         decimals: holding.token.decimals,
         quantity: parseFloat(holding.quantity),
@@ -463,34 +518,39 @@ export const questApi = {
   },
 
   // Buy token in quest
-  async buyTokenInQuest(questId: string, walletAddress: string, token: Token, quantity: number): Promise<ApiResponse<QuestPortfolio>> {
+  async buyTokenInQuest(
+    questId: string,
+    walletAddress: string,
+    token: Token,
+    quantity: number
+  ): Promise<ApiResponse<QuestPortfolio>> {
     try {
       const user = await getUserByWallet(walletAddress);
       if (!user) {
-        return { success: false, error: 'User not found' };
+        return { success: false, error: "User not found" };
       }
 
       // Check if user is participant
       const { data: participant, error: participantError } = await supabase
-        .from('quest_participants')
-        .select('*')
-        .eq('quest_id', questId)
-        .eq('user_id', user.id)
+        .from("quest_participants")
+        .select("*")
+        .eq("quest_id", questId)
+        .eq("user_id", user.id)
         .maybeSingle();
 
       if (!participant) {
-        return { success: false, error: 'User has not joined this quest' };
+        return { success: false, error: "User has not joined this quest" };
       }
 
       const cost = token.price * quantity;
 
       // Check if user already has this token in portfolio
       const { data: existingHolding, error: holdingError } = await supabase
-        .from('quest_portfolios')
-        .select('*')
-        .eq('quest_id', questId)
-        .eq('user_id', user.id)
-        .eq('token_id', token.id)
+        .from("quest_portfolios")
+        .select("*")
+        .eq("quest_id", questId)
+        .eq("user_id", user.id)
+        .eq("token_id", token.id)
         .maybeSingle();
 
       if (existingHolding) {
@@ -500,31 +560,29 @@ export const questApi = {
         const newValue = newQuantity * token.price;
 
         const { error } = await supabase
-          .from('quest_portfolios')
+          .from("quest_portfolios")
           .update({
             quantity: newQuantity.toString(),
             total_cost: newCost.toString(),
             current_value: newValue.toString(),
-            updated_at: new Date().toISOString()
+            updated_at: new Date().toISOString(),
           })
-          .eq('id', existingHolding.id);
+          .eq("id", existingHolding.id);
 
         if (error) {
           return { success: false, error: error.message };
         }
       } else {
         // Create new holding
-        const { error } = await supabase
-          .from('quest_portfolios')
-          .insert({
-            quest_id: questId,
-            user_id: user.id,
-            token_id: token.id,
-            quantity: quantity.toString(),
-            entry_price: token.price.toString(),
-            current_value: cost.toString(),
-            total_cost: cost.toString(),
-          });
+        const { error } = await supabase.from("quest_portfolios").insert({
+          quest_id: questId,
+          user_id: user.id,
+          token_id: token.id,
+          quantity: quantity.toString(),
+          entry_price: token.price.toString(),
+          current_value: cost.toString(),
+          total_cost: cost.toString(),
+        });
 
         if (error) {
           return { success: false, error: error.message };
@@ -539,31 +597,36 @@ export const questApi = {
   },
 
   // Sell token in quest
-  async sellTokenInQuest(questId: string, walletAddress: string, tokenId: string, quantity: number): Promise<ApiResponse<QuestPortfolio>> {
+  async sellTokenInQuest(
+    questId: string,
+    walletAddress: string,
+    tokenId: string,
+    quantity: number
+  ): Promise<ApiResponse<QuestPortfolio>> {
     try {
       const user = await getUserByWallet(walletAddress);
       if (!user) {
-        return { success: false, error: 'User not found' };
+        return { success: false, error: "User not found" };
       }
 
       // Get existing holding
       const { data: holding, error: fetchError } = await supabase
-        .from('quest_portfolios')
-        .select('*')
-        .eq('quest_id', questId)
-        .eq('user_id', user.id)
-        .eq('token_id', tokenId)
+        .from("quest_portfolios")
+        .select("*")
+        .eq("quest_id", questId)
+        .eq("user_id", user.id)
+        .eq("token_id", tokenId)
         .single();
 
       if (fetchError || !holding) {
-        return { success: false, error: 'Token not found in portfolio' };
+        return { success: false, error: "Token not found in portfolio" };
       }
 
       const currentQuantity = parseFloat(holding.quantity);
       const sellQuantity = Math.min(quantity, currentQuantity);
 
       if (sellQuantity <= 0) {
-        return { success: false, error: 'Invalid sell quantity' };
+        return { success: false, error: "Invalid sell quantity" };
       }
 
       const averageCost = parseFloat(holding.total_cost) / currentQuantity;
@@ -573,9 +636,9 @@ export const questApi = {
       if (newQuantity === 0) {
         // Remove holding completely
         const { error } = await supabase
-          .from('quest_portfolios')
+          .from("quest_portfolios")
           .delete()
-          .eq('id', holding.id);
+          .eq("id", holding.id);
 
         if (error) {
           return { success: false, error: error.message };
@@ -583,14 +646,14 @@ export const questApi = {
       } else {
         // Update holding
         const { error } = await supabase
-          .from('quest_portfolios')
+          .from("quest_portfolios")
           .update({
             quantity: newQuantity.toString(),
             total_cost: newCost.toString(),
             current_value: newQuantity * parseFloat(holding.entry_price), // Simplified
-            updated_at: new Date().toISOString()
+            updated_at: new Date().toISOString(),
           })
-          .eq('id', holding.id);
+          .eq("id", holding.id);
 
         if (error) {
           return { success: false, error: error.message };
@@ -604,22 +667,83 @@ export const questApi = {
     }
   },
 
+  // Submit portfolio for a quest
+  async submitQuestPortfolio(
+    questId: string,
+    walletAddress: string,
+    tokenSelections: Array<{
+      tokenId: string;
+      quantity: number;
+      entryPrice: number;
+      totalCost: number;
+    }>,
+    blockchainTxHash?: string
+  ): Promise<ApiResponse<void>> {
+    try {
+      const user = await getUserByWallet(walletAddress);
+      if (!user) {
+        return { success: false, error: "User not found" };
+      }
+
+      // Update quest_participants with portfolio submission timestamp and transaction hash
+      const { error: participantError } = await supabase
+        .from("quest_participants")
+        .update({
+          portfolio_submitted_at: new Date().toISOString(),
+          blockchain_tx_hash: blockchainTxHash,
+        })
+        .eq("quest_id", questId)
+        .eq("user_id", user.id);
+
+      if (participantError) {
+        return { success: false, error: participantError.message };
+      }
+
+      // Insert portfolio entries
+      const portfolioEntries = tokenSelections.map((selection) => ({
+        quest_id: questId,
+        user_id: user.id,
+        token_id: selection.tokenId,
+        quantity: selection.quantity.toString(),
+        entry_price: selection.entryPrice.toString(),
+        current_value: selection.totalCost.toString(), // Initial value equals cost
+        total_cost: selection.totalCost.toString(),
+      }));
+
+      const { error: portfolioError } = await supabase
+        .from("quest_portfolios")
+        .insert(portfolioEntries);
+
+      if (portfolioError) {
+        return { success: false, error: portfolioError.message };
+      }
+
+      return { success: true };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  },
+
   // Get quest leaderboard
-  async getQuestLeaderboard(questId: string): Promise<ApiResponse<LeaderboardEntry[]>> {
+  async getQuestLeaderboard(
+    questId: string
+  ): Promise<ApiResponse<LeaderboardEntry[]>> {
     const { data, error } = await supabase
-      .from('leaderboard_entries')
-      .select(`
+      .from("leaderboard_entries")
+      .select(
+        `
         *,
         user:users!leaderboard_entries_user_id_fkey(wallet_address)
-      `)
-      .eq('quest_id', questId)
-      .order('rank', { ascending: true });
+      `
+      )
+      .eq("quest_id", questId)
+      .order("rank", { ascending: true });
 
     if (error) {
       return { success: false, error: error.message };
     }
 
-    const leaderboard: LeaderboardEntry[] = data.map(entry => ({
+    const leaderboard: LeaderboardEntry[] = data.map((entry) => ({
       rank: entry.rank,
       address: entry.user.wallet_address,
       portfolioValue: parseFloat(entry.portfolio_value),

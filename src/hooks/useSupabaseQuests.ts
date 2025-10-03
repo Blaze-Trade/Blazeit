@@ -41,6 +41,8 @@ export function useSupabaseQuests() {
     endTime: Date;
     maxParticipants?: number;
     creatorWalletAddress: string;
+    blockchainQuestId?: number;
+    blockchainTxHash?: string;
   }) => {
     try {
       const result = await supabaseApi.quests.createQuest(questData);
@@ -50,32 +52,26 @@ export function useSupabaseQuests() {
         await fetchQuests();
         return { success: true, data: result.data };
       } else {
-        return { success: false, error: result.error || 'Failed to create quest' };
+        return {
+          success: false,
+          error: result.error || "Failed to create quest",
+        };
       }
     } catch (err: any) {
-      return { success: false, error: err.message || 'Failed to create quest' };
+      return { success: false, error: err.message || "Failed to create quest" };
     }
   };
 
-  const joinQuest = async (questId: string, walletAddress: string, entryFee?: number, creatorWalletAddress?: string) => {
+  const joinQuest = async (
+    questId: string,
+    walletAddress: string,
+    entryFee?: number,
+    creatorWalletAddress?: string
+  ) => {
     try {
-      // First, execute the entry fee transaction if there's an entry fee
-      if (entryFee && entryFee > 0 && creatorWalletAddress) {
-        const transactionResult = await transferAPT(
-          creatorWalletAddress,
-          entryFee,
-          `Paying ${entryFee} APT entry fee for quest`
-        );
+      // Note: Blockchain transaction is now handled by useQuestStaking hook
+      // This function only handles database operations after successful blockchain transaction
 
-        if (!transactionResult.success) {
-          return {
-            success: false,
-            error: `Entry fee transaction failed: ${transactionResult.error}`
-          };
-        }
-      }
-
-      // After successful transaction, join the quest in the database
       const result = await supabaseApi.quests.joinQuest(questId, walletAddress);
 
       if (result.success) {
@@ -86,7 +82,7 @@ export function useSupabaseQuests() {
         return result;
       }
     } catch (err: any) {
-      return { success: false, error: err.message || 'Failed to join quest' };
+      return { success: false, error: err.message || "Failed to join quest" };
     }
   };
 
@@ -94,23 +90,78 @@ export function useSupabaseQuests() {
     try {
       return await supabaseApi.quests.getQuestPortfolio(questId, walletAddress);
     } catch (err: any) {
-      return { success: false, error: err.message || 'Failed to get quest portfolio' };
+      return {
+        success: false,
+        error: err.message || "Failed to get quest portfolio",
+      };
     }
   };
 
-  const buyTokenInQuest = async (questId: string, walletAddress: string, token: any, quantity: number) => {
+  const buyTokenInQuest = async (
+    questId: string,
+    walletAddress: string,
+    token: any,
+    quantity: number
+  ) => {
     try {
-      return await supabaseApi.quests.buyTokenInQuest(questId, walletAddress, token, quantity);
+      return await supabaseApi.quests.buyTokenInQuest(
+        questId,
+        walletAddress,
+        token,
+        quantity
+      );
     } catch (err: any) {
-      return { success: false, error: err.message || 'Failed to buy token in quest' };
+      return {
+        success: false,
+        error: err.message || "Failed to buy token in quest",
+      };
     }
   };
 
-  const sellTokenInQuest = async (questId: string, walletAddress: string, tokenId: string, quantity: number) => {
+  const sellTokenInQuest = async (
+    questId: string,
+    walletAddress: string,
+    tokenId: string,
+    quantity: number
+  ) => {
     try {
-      return await supabaseApi.quests.sellTokenInQuest(questId, walletAddress, tokenId, quantity);
+      return await supabaseApi.quests.sellTokenInQuest(
+        questId,
+        walletAddress,
+        tokenId,
+        quantity
+      );
     } catch (err: any) {
-      return { success: false, error: err.message || 'Failed to sell token in quest' };
+      return {
+        success: false,
+        error: err.message || "Failed to sell token in quest",
+      };
+    }
+  };
+
+  const submitQuestPortfolio = async (
+    questId: string,
+    walletAddress: string,
+    tokenSelections: Array<{
+      tokenId: string;
+      quantity: number;
+      entryPrice: number;
+      totalCost: number;
+    }>,
+    blockchainTxHash?: string
+  ) => {
+    try {
+      return await supabaseApi.quests.submitQuestPortfolio(
+        questId,
+        walletAddress,
+        tokenSelections,
+        blockchainTxHash
+      );
+    } catch (err: any) {
+      return {
+        success: false,
+        error: err.message || "Failed to submit portfolio",
+      };
     }
   };
 
@@ -118,7 +169,10 @@ export function useSupabaseQuests() {
     try {
       return await supabaseApi.quests.getQuestLeaderboard(questId);
     } catch (err: any) {
-      return { success: false, error: err.message || 'Failed to get leaderboard' };
+      return {
+        success: false,
+        error: err.message || "Failed to get leaderboard",
+      };
     }
   };
 
@@ -131,6 +185,7 @@ export function useSupabaseQuests() {
     getQuestPortfolio,
     buyTokenInQuest,
     sellTokenInQuest,
+    submitQuestPortfolio,
     getQuestLeaderboard,
     refetch: fetchQuests,
   };

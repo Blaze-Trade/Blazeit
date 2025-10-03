@@ -13,9 +13,22 @@ async function getAptosClient() {
 }
 
 // Quest module configuration
+// NOTE: Devnet resets periodically, so you'll need to redeploy your contract
+// After redeploying, update the VITE_QUEST_MODULE_ADDRESS in your .env file
 const QUEST_MODULE_ADDRESS =
   import.meta.env.VITE_QUEST_MODULE_ADDRESS ||
-  "0x22d710758f35e3de12a5457419c356d97b36d766cf802a5d15b092cb231d4e1d";
+  "0x5fb97dfeb76077901d88b70f6f02f9f164e83828cc173998f52d019777aa931a"; // Your last known address
+
+// Log warning if using default address
+if (!import.meta.env.VITE_QUEST_MODULE_ADDRESS) {
+  console.warn(
+    "⚠️ Using default QUEST_MODULE_ADDRESS. This may not work if devnet was reset.\n" +
+      "To fix:\n" +
+      "1. Redeploy your quest_staking contract to devnet\n" +
+      "2. Create .env file with: VITE_QUEST_MODULE_ADDRESS=<your-new-address>\n" +
+      "3. Restart your dev server"
+  );
+}
 
 // APT has 8 decimals (octas)
 const APT_DECIMALS = 8;
@@ -56,7 +69,10 @@ export function useQuestStaking() {
 
       if (!signAndSubmitTransaction) {
         toast.error("Wallet not properly connected");
-        return { success: false, error: "signAndSubmitTransaction not available" };
+        return {
+          success: false,
+          error: "signAndSubmitTransaction not available",
+        };
       }
 
       setIsLoading(true);
@@ -101,10 +117,13 @@ export function useQuestStaking() {
           ? "You cancelled the transaction"
           : error?.message || "Transaction failed";
 
-        toast.error(isUserRejection ? "Transaction rejected" : `${description} failed`, {
-          id: toastId,
-          description: errorMessage,
-        });
+        toast.error(
+          isUserRejection ? "Transaction rejected" : `${description} failed`,
+          {
+            id: toastId,
+            description: errorMessage,
+          }
+        );
 
         return { success: false, error: errorMessage };
       } finally {
@@ -182,31 +201,30 @@ export function useQuestStaking() {
 
   /**
    * Select portfolio for a quest
-   * Must select exactly 5 tokens
+   * Must select 1-5 tokens (as per smart contract)
    *
    * @param questId - Blockchain quest ID
-   * @param tokenAddresses - Array of 5 token contract addresses
-   * @param amountsAPT - Array of 5 investment amounts in APT
+   * @param tokenAddresses - Array of token contract addresses
+   * @param amountsUSDC - Array of investment amounts in USDC (6 decimals)
    */
   const selectPortfolio = useCallback(
     async (params: {
       questId: number;
       tokenAddresses: string[];
-      amountsAPT: number[];
+      amountsUSDC: string[];
     }) => {
-      const { questId, tokenAddresses, amountsAPT } = params;
+      const { questId, tokenAddresses, amountsUSDC } = params;
 
-      // Validate exactly 5 tokens
-      if (tokenAddresses.length !== 5 || amountsAPT.length !== 5) {
-        toast.error("You must select exactly 5 tokens");
-        return { success: false, error: "Must select exactly 5 tokens" };
+      // Validate portfolio size (1-5 tokens as per smart contract)
+      if (tokenAddresses.length < 1 || tokenAddresses.length > 5) {
+        toast.error("You must select between 1 and 5 tokens");
+        return { success: false, error: "Invalid portfolio size" };
       }
 
-      // Convert APT amounts to USDC (6 decimals) for the contract
-      // For MVP, we'll use 1 APT = 10 USDC conversion for mock purposes
-      const amountsUSDC = amountsAPT.map((apt) =>
-        Math.floor(apt * 10 * 1000000).toString()
-      ); // *10 for APT->USD, *1000000 for 6 decimals
+      if (tokenAddresses.length !== amountsUSDC.length) {
+        toast.error("Token addresses and amounts must match");
+        return { success: false, error: "Mismatched arrays" };
+      }
 
       const payload = {
         function: `${QUEST_MODULE_ADDRESS}::quest_staking::select_portfolio`,
@@ -383,6 +401,7 @@ export function useQuestStaking() {
     // Utility functions
     aptToOctas,
     octasToApt,
+    getAptosClient,
 
     // Contract address
     contractAddress: QUEST_MODULE_ADDRESS,
