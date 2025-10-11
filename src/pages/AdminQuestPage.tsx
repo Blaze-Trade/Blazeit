@@ -9,23 +9,18 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useQuestPNL } from "@/hooks/useQuestPNL";
 import { useQuestStaking } from "@/hooks/useQuestStaking";
 import { useSupabaseQuests } from "@/hooks/useSupabaseQuests";
 import { useSupabaseTokens } from "@/hooks/useSupabaseTokens";
-import { formatPNLPercent, getPNLColorClass } from "@/lib/quest-pnl";
 import { questAdminApi } from "@/lib/quest-admin-api";
 import { usePortfolioStore } from "@/stores/portfolioStore";
 import type { Quest } from "@shared/types";
 import {
   Calculator,
   Crown,
-  RefreshCw,
   Shield,
-  TrendingUp,
   Users,
 } from "lucide-react";
-import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 export function AdminQuestPage() {
@@ -33,19 +28,9 @@ export function AdminQuestPage() {
   const { quests, loading, error } = useSupabaseQuests();
   const { tokens } = useSupabaseTokens();
   const { declareWinner, getQuestParticipants } = useQuestStaking();
-  const {
-    takeStartSnapshot,
-    takeEndSnapshot,
-    calculateAndRank,
-    leaderboard,
-    isCalculating,
-    fetchPriceSnapshots,
-    priceSnapshots,
-  } = useQuestPNL();
+  // PNL calculation and leaderboard now handled by Supabase
 
-  const [selectedQuest, setSelectedQuest] = useState<Quest | null>(null);
-  const [participants, setParticipants] = useState<string[]>([]);
-  const [loadingParticipants, setLoadingParticipants] = useState(false);
+  // Quest details are now handled by Supabase
 
   // Check if connected wallet is admin (you can hardcode admin addresses)
   const ADMIN_ADDRESSES = [
@@ -54,26 +39,7 @@ export function AdminQuestPage() {
 
   const isAdmin = address && ADMIN_ADDRESSES.includes(address);
 
-  useEffect(() => {
-    if (selectedQuest) {
-      loadParticipants(selectedQuest.id);
-      fetchPriceSnapshots(selectedQuest.id);
-    }
-  }, [selectedQuest]);
-
-  const loadParticipants = async (questId: string) => {
-    setLoadingParticipants(true);
-    try {
-      const result = await getQuestParticipants(parseInt(questId));
-      if (result.success && result.data) {
-        setParticipants(result.data);
-      }
-    } catch (error) {
-      console.error("Failed to load participants:", error);
-    } finally {
-      setLoadingParticipants(false);
-    }
-  };
+  // Quest participant loading is now handled by Supabase
 
   const handleStartQuest = async (quest: Quest) => {
     const result = await questAdminApi.startQuest(quest.id);
@@ -252,7 +218,7 @@ export function AdminQuestPage() {
                             className="rounded-none border border-blaze-black bg-blaze-orange hover:bg-blaze-black hover:text-white"
                           >
                             <Calculator className="w-4 h-4 mr-1" />
-                            Calculate
+                            View Results
                           </Button>
                         </>
                       )}
@@ -260,11 +226,10 @@ export function AdminQuestPage() {
                         <Button
                           size="sm"
                           onClick={() => handleDeclareWinner(quest)}
-                          disabled={leaderboard.length === 0}
                           className="rounded-none border border-blaze-black bg-green-600 hover:bg-green-700 text-white"
                         >
                           <Crown className="w-4 h-4 mr-1" />
-                          Declare Winner
+                          View Winners
                         </Button>
                       )}
                     </TableCell>
@@ -281,123 +246,7 @@ export function AdminQuestPage() {
           </CardContent>
         </Card>
 
-        {/* Selected Quest Details */}
-        {selectedQuest && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Leaderboard */}
-            <Card className="rounded-none border-2 border-blaze-black shadow-blaze-shadow">
-              <CardHeader className="border-b-2 border-blaze-black">
-                <CardTitle className="font-display text-2xl font-bold flex items-center gap-2">
-                  <TrendingUp className="w-6 h-6" />
-                  Leaderboard: {selectedQuest.name}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-6">
-                {isCalculating ? (
-                  <div className="text-center py-12">
-                    <RefreshCw className="w-12 h-12 animate-spin mx-auto text-blaze-orange" />
-                    <p className="mt-4 font-mono">Calculating results...</p>
-                  </div>
-                ) : leaderboard.length > 0 ? (
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="border-b-2 border-blaze-black">
-                        <TableHead className="font-mono text-sm uppercase">
-                          Rank
-                        </TableHead>
-                        <TableHead className="font-mono text-sm uppercase">
-                          Address
-                        </TableHead>
-                        <TableHead className="font-mono text-sm uppercase text-right">
-                          PNL%
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {leaderboard.map((participant) => (
-                        <TableRow
-                          key={participant.userId}
-                          className={`border-b border-blaze-black/20 ${
-                            participant.rank === 1 ? "bg-yellow-50" : ""
-                          }`}
-                        >
-                          <TableCell className="font-bold">
-                            {participant.rank === 1 && (
-                              <Crown className="inline w-4 h-4 mr-1 text-yellow-600" />
-                            )}
-                            #{participant.rank}
-                          </TableCell>
-                          <TableCell className="font-mono">
-                            {participant.walletAddress.slice(0, 10)}...
-                          </TableCell>
-                          <TableCell
-                            className={`text-right font-mono font-bold ${getPNLColorClass(
-                              participant.totalPNL
-                            )}`}
-                          >
-                            {formatPNLPercent(participant.totalPNLPercent)}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                ) : (
-                  <div className="text-center py-12 text-blaze-black/50 font-mono">
-                    Click "Calculate" to generate leaderboard
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Price Snapshots */}
-            <Card className="rounded-none border-2 border-blaze-black shadow-blaze-shadow">
-              <CardHeader className="border-b-2 border-blaze-black">
-                <CardTitle className="font-display text-2xl font-bold">
-                  Price Movements
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-6">
-                {priceSnapshots.length > 0 ? (
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="border-b-2 border-blaze-black">
-                        <TableHead className="font-mono text-sm uppercase">
-                          Token
-                        </TableHead>
-                        <TableHead className="font-mono text-sm uppercase text-right">
-                          Change
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {priceSnapshots.map((snap) => (
-                        <TableRow
-                          key={snap.tokenId}
-                          className="border-b border-blaze-black/20"
-                        >
-                          <TableCell className="font-mono font-bold">
-                            {snap.tokenSymbol}
-                          </TableCell>
-                          <TableCell
-                            className={`text-right font-mono font-bold ${getPNLColorClass(
-                              snap.priceChange
-                            )}`}
-                          >
-                            {formatPNLPercent(snap.priceChangePercent)}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                ) : (
-                  <div className="text-center py-12 text-blaze-black/50 font-mono">
-                    No price data available yet
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        )}
+        {/* Quest details are now handled by Supabase - no need for local state management */}
 
         {/* Info Card */}
         <Card className="rounded-none border-2 border-blue-600 bg-blue-50">
