@@ -14,6 +14,7 @@ import { useQuestStaking } from "@/hooks/useQuestStaking";
 import { useSupabaseQuests } from "@/hooks/useSupabaseQuests";
 import { useSupabaseTokens } from "@/hooks/useSupabaseTokens";
 import { formatPNLPercent, getPNLColorClass } from "@/lib/quest-pnl";
+import { questAdminApi } from "@/lib/quest-admin-api";
 import { usePortfolioStore } from "@/stores/portfolioStore";
 import type { Quest } from "@shared/types";
 import {
@@ -75,58 +76,35 @@ export function AdminQuestPage() {
   };
 
   const handleStartQuest = async (quest: Quest) => {
-    const result = await takeStartSnapshot(quest.id, tokens);
+    const result = await questAdminApi.startQuest(quest.id);
     if (result.success) {
       toast.success("Quest started! Price snapshot taken.");
+      // Refresh quests data
+      window.location.reload();
+    } else {
+      toast.error(result.error || "Failed to start quest");
     }
   };
 
   const handleEndQuest = async (quest: Quest) => {
-    // Calculate duration in hours from durationMinutes
-    const durationHours = quest.durationMinutes
-      ? Math.ceil(quest.durationMinutes / 60)
-      : 24;
-    const result = await takeEndSnapshot(quest.id, tokens, durationHours);
+    const result = await questAdminApi.endQuest(quest.id);
     if (result.success) {
-      toast.success("Quest ended! Final prices calculated.");
+      toast.success("Quest ended! Results calculated and prizes distributed.");
+      // Refresh quests data
+      window.location.reload();
+    } else {
+      toast.error(result.error || "Failed to end quest");
     }
   };
 
   const handleCalculateResults = async (quest: Quest) => {
-    const result = await calculateAndRank(quest.id);
-    if (result.success) {
-      setSelectedQuest(quest);
-    }
+    // Results are automatically calculated when quest ends
+    toast.info("Results are automatically calculated when quest ends");
   };
 
   const handleDeclareWinner = async (quest: Quest) => {
-    if (leaderboard.length === 0) {
-      toast.error("Please calculate results first");
-      return;
-    }
-
-    const winner = leaderboard[0];
-    const confirmed = window.confirm(
-      `Declare ${
-        winner.walletAddress
-      } as winner?\n\nThey will receive the prize pool of $${quest.prizePool.toLocaleString()}`
-    );
-
-    if (!confirmed) return;
-
-    // Declare winner on blockchain
-    if (quest.blockchainQuestId) {
-      const result = await declareWinner(
-        quest.blockchainQuestId,
-        winner.walletAddress
-      );
-
-      if (result.success) {
-        toast.success("Winner declared successfully on blockchain!");
-      }
-    } else {
-      toast.error("Quest not properly configured for blockchain operations");
-    }
+    // Winners are automatically declared and prizes distributed when quest ends
+    toast.info("Winners are automatically declared and prizes distributed when quest ends");
   };
 
   if (!isConnected) {

@@ -34,6 +34,7 @@ export interface LeaderboardEntry {
   address: string;
   portfolioValue: number;
   pnlPercent: number;
+  prizeWon?: number; // Prize amount won by this participant
 }
 export interface Holding extends Token {
   quantity: number;

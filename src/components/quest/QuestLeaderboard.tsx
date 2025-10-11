@@ -18,6 +18,7 @@ export function QuestLeaderboard({ leaderboard }: QuestLeaderboardProps) {
               <TableHead className="font-mono text-lg uppercase tracking-widest">Player</TableHead>
               <TableHead className="text-right font-mono text-lg uppercase tracking-widest">Value</TableHead>
               <TableHead className="text-right font-mono text-lg uppercase tracking-widest">P&L %</TableHead>
+              <TableHead className="text-right font-mono text-lg uppercase tracking-widest">Prize</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -33,6 +34,15 @@ export function QuestLeaderboard({ leaderboard }: QuestLeaderboardProps) {
                       {isPositivePnl ? <TrendingUp size={20} /> : <TrendingDown size={20} />}
                       {entry.pnlPercent.toFixed(2)}%
                     </div>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {entry.prizeWon && entry.prizeWon > 0 ? (
+                      <span className="text-yellow-600 font-bold">
+                        ${entry.prizeWon.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">-</span>
+                    )}
                   </TableCell>
                 </TableRow>
               );

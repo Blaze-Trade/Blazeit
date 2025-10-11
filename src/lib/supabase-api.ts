@@ -7,6 +7,7 @@ import type {
   Token,
 } from "@shared/types";
 import { supabase } from './supabase';
+import { formatDuration } from './utils';
 
 // Database types (matching our Supabase schema)
 export interface User {
@@ -225,165 +226,102 @@ export const questApi = {
   async getQuests(): Promise<
     ApiResponse<{ items: Quest[]; next: string | null }>
   > {
-    const { data, error } = await supabase
-      .from("quests")
-      .select(
-        `
-        *,
-        creator:users!quests_creator_id_fkey(username, wallet_address)
-      `
-      )
-      .order("start_time", { ascending: true });
+    try {
+      const { data, error } = await supabase.rpc('get_all_quests');
 
-    if (error) {
-      return { success: false, error: error.message };
-    }
-
-    const quests: Quest[] = data.map((quest) => {
-      // Get duration directly from database, or fallback to calculating from start/end times
-      let durationMinutes = quest.duration_minutes || 0;
-
-      // If duration_minutes is 0 or invalid, calculate from start/end times as fallback
-      if (!durationMinutes || durationMinutes === 0) {
-        if (quest.start_time && quest.end_time) {
-          const startTime = new Date(quest.start_time);
-          const endTime = new Date(quest.end_time);
-          const diffMs = endTime.getTime() - startTime.getTime();
-          durationMinutes = Math.round(diffMs / (1000 * 60));
-        }
+      if (error) {
+        return { success: false, error: error.message };
       }
 
-      // Calculate actual status based on current time (don't trust DB status)
-      let actualStatus: "upcoming" | "active" | "ended" = quest.status;
-      if (quest.start_time && quest.end_time) {
-        const now = new Date();
-        const startTime = new Date(quest.start_time);
-        const endTime = new Date(quest.end_time);
-
-        if (now < startTime) {
-          actualStatus = "upcoming";
-        } else if (now >= startTime && now < endTime) {
-          actualStatus = "active";
-        } else {
-          actualStatus = "ended";
-        }
-      }
-
-      console.log("📊 Mapping quest from DB:", {
+      const quests: Quest[] = data.map((quest: any) => ({
         id: quest.id,
         name: quest.name,
-        duration_minutes: quest.duration_minutes,
-        start_time: quest.start_time,
-        end_time: quest.end_time,
-        final_durationMinutes: durationMinutes,
-        db_status: quest.status,
-        actual_status: actualStatus,
+        entryFee: quest.entryFee,
+        prizePool: quest.prizePool,
+        duration: formatDuration(quest.durationMinutes),
+        durationMinutes: quest.durationMinutes,
+        participants: quest.currentParticipants || 0,
+        status: quest.status,
+        startTime: quest.startTime,
+        endTime: quest.endTime,
+        creatorId: quest.creatorId,
+        creatorWalletAddress: quest.creatorWalletAddress,
+        blockchainQuestId: quest.blockchainQuestId,
+      }));
+
+      // Sort quests intelligently:
+      // 1. Active quests first (ending soonest at top)
+      // 2. Upcoming quests (starting soonest at top)
+      // 3. Ended quests last (most recently ended at top)
+      const sortedQuests = quests.sort((a, b) => {
+        const statusOrder = { active: 0, upcoming: 1, ended: 2 };
+        const statusDiff = statusOrder[a.status] - statusOrder[b.status];
+
+        // If different status, sort by status priority
+        if (statusDiff !== 0) {
+          return statusDiff;
+        }
+
+        // Same status - sort by time
+        if (a.status === "active") {
+          // Active: show ending soonest first
+          const aEnd = a.endTime ? new Date(a.endTime).getTime() : Infinity;
+          const bEnd = b.endTime ? new Date(b.endTime).getTime() : Infinity;
+          return aEnd - bEnd;
+        } else if (a.status === "upcoming") {
+          // Upcoming: show starting soonest first
+          const aStart = a.startTime ? new Date(a.startTime).getTime() : Infinity;
+          const bStart = b.startTime ? new Date(b.startTime).getTime() : Infinity;
+          return aStart - bStart;
+        } else {
+          // Ended: show most recently ended first
+          const aEnd = a.endTime ? new Date(a.endTime).getTime() : 0;
+          const bEnd = b.endTime ? new Date(b.endTime).getTime() : 0;
+          return bEnd - aEnd;
+        }
       });
 
-      return {
-        id: quest.id,
-        name: quest.name,
-        entryFee: parseFloat(quest.entry_fee),
-        prizePool: parseFloat(quest.prize_pool),
-        duration: "", // Deprecated - use durationMinutes only
-        durationMinutes: durationMinutes, // Convert hours to minutes or calculate from times
-        participants: quest.current_participants,
-        status: actualStatus, // Use calculated status, not DB status
-        startTime: quest.start_time,
-        endTime: quest.end_time,
-        blockchainQuestId: quest.blockchain_quest_id, // Include blockchain quest ID
-      };
-    });
-
-    // Sort quests intelligently:
-    // 1. Active quests first (ending soonest at top)
-    // 2. Upcoming quests (starting soonest at top)
-    // 3. Ended quests last (most recently ended at top)
-    const sortedQuests = quests.sort((a, b) => {
-      const statusOrder = { active: 0, upcoming: 1, ended: 2 };
-      const statusDiff = statusOrder[a.status] - statusOrder[b.status];
-
-      // If different status, sort by status priority
-      if (statusDiff !== 0) {
-        return statusDiff;
-      }
-
-      // Same status - sort by time
-      if (a.status === "active") {
-        // Active: show ending soonest first
-        const aEnd = a.endTime ? new Date(a.endTime).getTime() : Infinity;
-        const bEnd = b.endTime ? new Date(b.endTime).getTime() : Infinity;
-        return aEnd - bEnd;
-      } else if (a.status === "upcoming") {
-        // Upcoming: show starting soonest first
-        const aStart = a.startTime ? new Date(a.startTime).getTime() : Infinity;
-        const bStart = b.startTime ? new Date(b.startTime).getTime() : Infinity;
-        return aStart - bStart;
-      } else {
-        // Ended: show most recently ended first
-        const aEnd = a.endTime ? new Date(a.endTime).getTime() : 0;
-        const bEnd = b.endTime ? new Date(b.endTime).getTime() : 0;
-        return bEnd - aEnd;
-      }
-    });
-
-    return { success: true, data: { items: sortedQuests, next: null } };
+      return { success: true, data: { items: sortedQuests, next: null } };
+    } catch (error) {
+      return { success: false, error: 'Failed to fetch quests' };
+    }
   },
 
-  // Get quest by ID
+  // Get quest by ID using centralized RPC function
   async getQuest(questId: string): Promise<ApiResponse<Quest>> {
-    const { data, error } = await supabase
-      .from("quests")
-      .select(
-        `
-        *,
-        creator:users!quests_creator_id_fkey(username, wallet_address)
-      `
-      )
-      .eq("id", questId)
-      .single();
+    try {
+      const { data, error } = await supabase.rpc('get_quest_details', {
+        quest_uuid: questId
+      });
 
-    if (error) {
-      return { success: false, error: "Quest not found" };
-    }
-
-    // Get duration directly from database, or fallback to calculating from start/end times
-    let durationMinutes = data.duration_minutes || 0;
-
-    // If duration_minutes is 0 or invalid, calculate from start/end times as fallback
-    if (!durationMinutes || durationMinutes === 0) {
-      if (data.start_time && data.end_time) {
-        const startTime = new Date(data.start_time);
-        const endTime = new Date(data.end_time);
-        const diffMs = endTime.getTime() - startTime.getTime();
-        durationMinutes = Math.round(diffMs / (1000 * 60));
+      if (error) {
+        return { success: false, error: error.message };
       }
+
+      if (!data) {
+        return { success: false, error: "Quest not found" };
+      }
+
+      const quest: Quest = {
+        id: data.id,
+        name: data.name,
+        entryFee: data.entryFee,
+        prizePool: data.prizePool,
+        duration: formatDuration(data.durationMinutes),
+        durationMinutes: data.durationMinutes,
+        participants: data.currentParticipants || 0,
+        status: data.status,
+        startTime: data.startTime,
+        endTime: data.endTime,
+        creatorId: data.creatorId,
+        creatorWalletAddress: data.creatorWalletAddress,
+        blockchainQuestId: data.blockchainQuestId,
+      };
+
+      return { success: true, data: quest };
+    } catch (error) {
+      return { success: false, error: 'Failed to fetch quest details' };
     }
-
-    console.log("📊 Mapping single quest from DB:", {
-      id: data.id,
-      name: data.name,
-      duration_minutes: data.duration_minutes,
-      start_time: data.start_time,
-      end_time: data.end_time,
-      final_durationMinutes: durationMinutes,
-    });
-
-    const quest: Quest = {
-      id: data.id,
-      name: data.name,
-      entryFee: parseFloat(data.entry_fee),
-      prizePool: parseFloat(data.prize_pool),
-      duration: "", // Deprecated - use durationMinutes only
-      durationMinutes: durationMinutes, // Convert hours to minutes or calculate from times
-      participants: data.current_participants,
-      status: data.status,
-      startTime: data.start_time,
-      endTime: data.end_time,
-      blockchainQuestId: data.blockchain_quest_id, // Include blockchain quest ID
-    };
-
-    return { success: true, data: quest };
   },
 
   // Create quest
@@ -479,98 +417,22 @@ export const questApi = {
     walletAddress: string
   ): Promise<ApiResponse<QuestPortfolio>> {
     try {
-      const user = await createOrGetUser(walletAddress);
-
-      // Get quest details
-      const questResponse = await this.getQuest(questId);
-      if (!questResponse.success || !questResponse.data) {
-        return { success: false, error: "Quest not found" };
-      }
-
-      const quest = questResponse.data;
-
-      // Check if user already joined
-      const { data: existingParticipant, error: participantCheckError } =
-        await supabase
-          .from("quest_participants")
-          .select("*")
-          .eq("quest_id", questId)
-          .eq("user_id", user.id)
-          .maybeSingle();
-
-      if (existingParticipant) {
-        // Return existing portfolio
-        const portfolioResponse = await this.getQuestPortfolio(
-          questId,
-          walletAddress
-        );
-        return portfolioResponse;
-      }
-
-      // Check if quest is joinable
-      const now = new Date();
-      const startTime = new Date(quest.startTime!);
-      const endTime = new Date(quest.endTime!);
-
-      // if (now >= startTime) {
-      //   return { success: false, error: 'Cannot join quest after it has started' };
-      // }
-
-      // if (now >= endTime) {
-      //   return { success: false, error: 'Cannot join quest after it has ended' };
-      // }
-
-      // Start transaction
-      const { error: participantError } = await supabase
-        .from("quest_participants")
-        .insert({
-          quest_id: questId,
-          user_id: user.id,
-          entry_fee_paid: quest.entryFee.toString(),
-        });
-
-      if (participantError) {
-        return { success: false, error: participantError.message };
-      }
-
-      // Update user balance
-      const { error: balanceError } = await supabase
-        .from("users")
-        .update({
-          balance: (user.balance - quest.entryFee).toString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", user.id);
-
-      if (balanceError) {
-        return { success: false, error: balanceError.message };
-      }
-
-      // Update quest participant count
-      const { error: questError } = await supabase
-        .from("quests")
-        .update({
-          current_participants: quest.participants + 1,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", questId);
-
-      if (questError) {
-        return { success: false, error: questError.message };
-      }
-
-      // Create transaction record
-      await supabase.from("transactions").insert({
-        user_id: user.id,
-        quest_id: questId,
-        type: "quest_entry",
-        amount: quest.entryFee.toString(),
-        status: "completed",
+      const { data, error } = await supabase.rpc('join_quest', {
+        quest_uuid: questId,
+        user_wallet_address: walletAddress
       });
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      if (!data.success) {
+        return { success: false, error: data.error };
+      }
 
       // Return new portfolio
       const portfolio: QuestPortfolio = {
-        id: `${questId}:${user.id}`,
+        id: `${questId}:${walletAddress}`,
         questId,
         userId: walletAddress,
         joinedAt: Date.now(),
@@ -583,52 +445,41 @@ export const questApi = {
     }
   },
 
-  // Get quest portfolio
+  // Get quest portfolio using centralized RPC function
   async getQuestPortfolio(
     questId: string,
     walletAddress: string
   ): Promise<ApiResponse<QuestPortfolio>> {
     try {
-      const user = await getUserByWallet(walletAddress);
-      if (!user) {
-        return { success: false, error: "User not found" };
-      }
-
-      const { data: portfolioData, error } = await supabase
-        .from("quest_portfolios")
-        .select(
-          `
-          *,
-          token:tokens(*)
-        `
-        )
-        .eq("quest_id", questId)
-        .eq("user_id", user.id);
+      const { data, error } = await supabase.rpc('get_user_quest_portfolio', {
+        quest_uuid: questId,
+        user_wallet_address: walletAddress
+      });
 
       if (error) {
         return { success: false, error: error.message };
       }
 
-      const holdings: Holding[] = portfolioData.map((holding) => ({
-        id: holding.token.id,
-        symbol: holding.token.symbol,
-        name: holding.token.name,
-        price: parseFloat(holding.token.price),
-        change24h: parseFloat(holding.token.change_24h),
-        marketCap: parseFloat(holding.token.market_cap),
-        logoUrl: holding.token.logo_url || "",
-        address: holding.token.address,
-        decimals: holding.token.decimals,
-        quantity: parseFloat(holding.quantity),
-        cost: parseFloat(holding.total_cost),
-        value: parseFloat(holding.current_value),
+      const holdings: Holding[] = data.map((holding: any) => ({
+        id: holding.tokenId,
+        symbol: holding.symbol,
+        name: holding.name,
+        price: holding.entryPrice, // Use entry price for quest context
+        change24h: 0, // Not relevant in quest context
+        marketCap: 0, // Not relevant in quest context
+        logoUrl: '', // Not provided by RPC
+        address: '', // Not provided by RPC
+        decimals: 8, // Default
+        quantity: holding.quantity,
+        cost: holding.totalCost,
+        value: holding.currentValue,
       }));
 
       const portfolio: QuestPortfolio = {
-        id: `${questId}:${user.id}`,
+        id: `${questId}:${walletAddress}`,
         questId,
         userId: walletAddress,
-        joinedAt: Date.now(), // We'll need to get this from quest_participants
+        joinedAt: Date.now(), // Will be updated when we get participant info
         holdings,
       };
 
@@ -801,56 +652,26 @@ export const questApi = {
     blockchainTxHash?: string
   ): Promise<ApiResponse<void>> {
     try {
-      const user = await getUserByWallet(walletAddress);
-      if (!user) {
-        return { success: false, error: "User not found" };
-      }
-
-      // Update quest_participants with portfolio submission timestamp and transaction hash
-      const { error: participantError } = await supabase
-        .from("quest_participants")
-        .update({
-          portfolio_submitted_at: new Date().toISOString(),
-          blockchain_tx_hash: blockchainTxHash,
-        })
-        .eq("quest_id", questId)
-        .eq("user_id", user.id);
-
-      if (participantError) {
-        return { success: false, error: participantError.message };
-      }
-
-      // First, delete existing portfolio entries for this quest/user (if resubmitting)
-      const { error: deleteError } = await supabase
-        .from("quest_portfolios")
-        .delete()
-        .eq("quest_id", questId)
-        .eq("user_id", user.id);
-
-      if (deleteError) {
-        console.warn(
-          "Warning: Could not delete existing portfolio entries:",
-          deleteError
-        );
-      }
-
-      // Insert new portfolio entries
-      const portfolioEntries = tokenSelections.map((selection) => ({
-        quest_id: questId,
-        user_id: user.id,
-        token_id: selection.tokenId,
-        quantity: selection.quantity.toString(),
-        entry_price: selection.entryPrice.toString(),
-        current_value: selection.totalCost.toString(), // Initial value equals cost
-        total_cost: selection.totalCost.toString(),
+      // Convert token selections to the format expected by the RPC function
+      const portfolioData = tokenSelections.map(selection => ({
+        tokenId: selection.tokenId,
+        quantity: selection.quantity,
+        entryPrice: selection.entryPrice,
+        totalCost: selection.totalCost
       }));
 
-      const { error: portfolioError } = await supabase
-        .from("quest_portfolios")
-        .insert(portfolioEntries);
+      const { data, error } = await supabase.rpc('submit_quest_portfolio', {
+        quest_uuid: questId,
+        user_wallet_address: walletAddress,
+        portfolio_data: portfolioData
+      });
 
-      if (portfolioError) {
-        return { success: false, error: portfolioError.message };
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      if (!data.success) {
+        return { success: false, error: data.error };
       }
 
       return { success: true };
@@ -859,33 +680,31 @@ export const questApi = {
     }
   },
 
-  // Get quest leaderboard
+  // Get quest leaderboard using centralized RPC function
   async getQuestLeaderboard(
     questId: string
   ): Promise<ApiResponse<LeaderboardEntry[]>> {
-    const { data, error } = await supabase
-      .from("leaderboard_entries")
-      .select(
-        `
-        *,
-        user:users!leaderboard_entries_user_id_fkey(wallet_address)
-      `
-      )
-      .eq("quest_id", questId)
-      .order("rank", { ascending: true });
+    try {
+      const { data, error } = await supabase.rpc('get_quest_leaderboard', {
+        quest_uuid: questId
+      });
 
-    if (error) {
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      const leaderboard: LeaderboardEntry[] = data.map((entry: any) => ({
+        rank: entry.rank,
+        address: entry.address,
+        portfolioValue: entry.portfolioValue,
+        pnlPercent: entry.pnlPercent,
+        prizeWon: entry.prizeWon || 0,
+      }));
+
+      return { success: true, data: leaderboard };
+    } catch (error: any) {
       return { success: false, error: error.message };
     }
-
-    const leaderboard: LeaderboardEntry[] = data.map((entry) => ({
-      rank: entry.rank,
-      address: entry.user.wallet_address,
-      portfolioValue: parseFloat(entry.portfolio_value),
-      pnlPercent: parseFloat(entry.pnl_percent),
-    }));
-
-    return { success: true, data: leaderboard };
   },
 };
 
