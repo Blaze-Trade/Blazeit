@@ -62,24 +62,3 @@ export function formatDuration(minutes: number): string {
   }
   return `${days}d ${remainingHours}h`;
 }
-
-/**
- * Format duration in minutes to short format (for compact display)
- * @param minutes - Duration in minutes
- * @returns Short formatted string like "30m", "2h", "3d"
- */
-export function formatDurationShort(minutes: number): string {
-  if (minutes <= 0) return "0m";
-
-  if (minutes < 60) {
-    return `${Math.round(minutes)}m`;
-  }
-
-  if (minutes < 1440) {
-    const hours = Math.round(minutes / 60);
-    return `${hours}h`;
-  }
-
-  const days = Math.round(minutes / 1440);
-  return `${days}d`;
-}

@@ -59,7 +59,7 @@ async function getMintLimit(fa_address: string): Promise<number> {
 /**
  * A react hook to get fungible asset data for a specific asset.
  */
-export function useGetAssetData(fa_address?: string) {
+function useGetAssetData(fa_address?: string) {
   const { account } = useWallet();
 
   return useQuery({
@@ -115,22 +115,41 @@ export function useGetAssetData(fa_address?: string) {
 
         return {
           asset,
-          maxSupply: convertAmountFromOnChainToHumanReadable(asset.maximum_v2 ?? 0, asset.decimals),
-          currentSupply: convertAmountFromOnChainToHumanReadable(asset.supply_v2 ?? 0, asset.decimals),
-          uniqueHolders: res.current_fungible_asset_balances_aggregate.aggregate.count ?? 0,
-          totalAbleToMint: convertAmountFromOnChainToHumanReadable(await getMintLimit(fa_address), asset.decimals),
+          maxSupply: convertAmountFromOnChainToHumanReadable(
+            asset.maximum_v2 ?? 0,
+            asset.decimals
+          ),
+          currentSupply: convertAmountFromOnChainToHumanReadable(
+            asset.supply_v2 ?? 0,
+            asset.decimals
+          ),
+          uniqueHolders:
+            res.current_fungible_asset_balances_aggregate.aggregate.count ?? 0,
+          totalAbleToMint: convertAmountFromOnChainToHumanReadable(
+            await getMintLimit(fa_address),
+            asset.decimals
+          ),
           yourBalance: convertAmountFromOnChainToHumanReadable(
             res.current_fungible_asset_balances[0]?.amount ?? 0,
-            asset.decimals,
+            asset.decimals
           ),
           isMintActive: asset.maximum_v2 > asset.supply_v2,
         } satisfies MintData;
       } catch (error) {
-        console.warn("Error fetching asset data (this is expected if contract doesn't exist):", error);
+        console.warn(
+          "Error fetching asset data (this is expected if contract doesn't exist):",
+          error
+        );
 
         // If it's a rate limit error, return a minimal data structure
-        if (error instanceof Error && (error.message.includes("rate limit") || error.message.includes("404"))) {
-          console.warn("Contract not found or rate limited, returning minimal data");
+        if (
+          error instanceof Error &&
+          (error.message.includes("rate limit") ||
+            error.message.includes("404"))
+        ) {
+          console.warn(
+            "Contract not found or rate limited, returning minimal data"
+          );
           return {
             asset: {
               maximum_v2: 0,
@@ -139,7 +158,7 @@ export function useGetAssetData(fa_address?: string) {
               symbol: "UNK",
               decimals: 8,
               asset_type: fa_address!,
-              icon_uri: ""
+              icon_uri: "",
             },
             maxSupply: 0,
             currentSupply: 0,
@@ -159,25 +178,29 @@ export function useGetAssetData(fa_address?: string) {
 /**
  * A react hook to get all fungible asset metadata from the launchpad.
  */
-export function useGetAssetMetadata() {
+function useGetAssetMetadata() {
   const [fas, setFAs] = useState<GetFungibleAssetMetadataResponse>([]);
 
   useEffect(() => {
     // fetch the contract registry address
-    getRegistry().then((faObjects) => {
-      // fetch fungible assets objects created under that contract registry address
-      // get each fungible asset object metadata
-      getMetadata(faObjects).then((metadatas) => {
-        console.log("Fungible asset metadata:", metadatas);
-        setFAs(metadatas);
-      }).catch((error) => {
-        console.warn("Failed to fetch metadata:", error);
+    getRegistry()
+      .then((faObjects) => {
+        // fetch fungible assets objects created under that contract registry address
+        // get each fungible asset object metadata
+        getMetadata(faObjects)
+          .then((metadatas) => {
+            console.log("Fungible asset metadata:", metadatas);
+            setFAs(metadatas);
+          })
+          .catch((error) => {
+            console.warn("Failed to fetch metadata:", error);
+            setFAs([]);
+          });
+      })
+      .catch((error) => {
+        console.warn("Failed to fetch registry:", error);
         setFAs([]);
       });
-    }).catch((error) => {
-      console.warn("Failed to fetch registry:", error);
-      setFAs([]);
-    });
   }, []);
 
   return fas;

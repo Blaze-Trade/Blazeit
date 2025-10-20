@@ -26,7 +26,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
       }
 
       // Handle quest-specific endpoints
-      const questMatch = endpoint.match(/^quests\/([^\/]+)(?:\/(.+))?$/);
+      const questMatch = endpoint.match(/^quests\/([^/]+)(?:\/(.+))?$/);
       if (questMatch) {
         const questId = questMatch[1];
         const subPath = questMatch[2];

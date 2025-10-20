@@ -1,5 +1,5 @@
 // Contract configuration and addresses
-export const CONTRACT_CONFIG = {
+const CONTRACT_CONFIG = {
   // Network configuration
   network: process.env.NODE_ENV === "production" ? "mainnet" : "devnet",
 
@@ -89,63 +89,3 @@ export const createTransactionPayload = (
   typeArguments,
   functionArguments,
 });
-
-export const formatAptAmount = (amount: number): string => {
-  return (amount / 100000000).toFixed(8); // Convert octas to APT
-};
-
-export const parseAptAmount = (amount: string): number => {
-  return Math.floor(parseFloat(amount) * 100000000); // Convert APT to octas
-};
-
-// Contract state queries
-export const CONTRACT_QUERIES = {
-  // Token queries
-  getTokenInfo: async (client: any, symbol: string) => {
-    try {
-      const payload = createTransactionPayload(
-        CONTRACT_FUNCTIONS.launchpad.getTokenInfo,
-        [],
-        [symbol]
-      );
-      return await client.view(payload);
-    } catch (error) {
-      console.error("Error fetching token info:", error);
-      return null;
-    }
-  },
-
-  // Quest queries
-  getQuestInfo: async (client: any, questId: string) => {
-    try {
-      const payload = createTransactionPayload(
-        CONTRACT_FUNCTIONS.launchpad.getQuestInfo,
-        [],
-        [questId]
-      );
-      return await client.view(payload);
-    } catch (error) {
-      console.error("Error fetching quest info:", error);
-      return null;
-    }
-  },
-
-  // Portfolio queries
-  getPortfolioInfo: async (
-    client: any,
-    questId: string,
-    participant: string
-  ) => {
-    try {
-      const payload = createTransactionPayload(
-        CONTRACT_FUNCTIONS.launchpad.getPortfolioInfo,
-        [],
-        [questId, participant]
-      );
-      return await client.view(payload);
-    } catch (error) {
-      console.error("Error fetching portfolio info:", error);
-      return null;
-    }
-  },
-} as const;
