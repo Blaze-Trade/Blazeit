@@ -1,20 +1,21 @@
+"use client";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useTokenCreation } from "@/hooks/useTokenCreation";
-import { usePortfolioStore } from "@/stores/portfolioStore";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { ArrowLeft, Coins, Upload } from "lucide-react";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 export function TokenCreationPage() {
-  const navigate = useNavigate();
+  const router = useRouter();
   const { account, connected } = useWallet();
-  const { isConnected } = usePortfolioStore();
   const { createToken, uploadImage, isCreating } = useTokenCreation();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
@@ -185,7 +186,7 @@ export function TokenCreationPage() {
     });
 
     if (result.success) {
-      navigate("/");
+      router.push("/");
     }
   };
 
@@ -199,7 +200,7 @@ export function TokenCreationPage() {
         <div className="flex items-center gap-4 mb-8">
           <Button
             variant="outline"
-            onClick={() => navigate("/")}
+            onClick={() => router.push("/")}
             className="rounded-none border-2 border-blaze-black bg-blaze-white text-blaze-black hover:bg-blaze-orange hover:text-blaze-black"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
@@ -468,7 +469,7 @@ export function TokenCreationPage() {
                   />
                   <p className="text-xs text-blaze-black/50 font-mono">
                     Stored but NOT USED. Contract hardcodes cubic formula
-                    (amount³). This parameter doesn't affect pricing.
+                    (amount³). This parameter doesn&apos;t affect pricing.
                   </p>
                 </div>
 
@@ -568,9 +569,11 @@ export function TokenCreationPage() {
                     </p>
                     {formData.imageUrl && (
                       <div className="mt-2">
-                        <img
+                        <Image
                           src={formData.imageUrl}
                           alt="Token preview"
+                          width={128}
+                          height={128}
                           className="w-32 h-32 object-cover border-2 border-blaze-black"
                           onLoad={() =>
                             console.log(

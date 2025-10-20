@@ -102,10 +102,10 @@ This command bundles the React frontend for production.
 
 Make sure to configure the following environment variables in your deployment platform:
 
-- `VITE_SUPABASE_URL`: Your Supabase project URL
-- `VITE_SUPABASE_ANON_KEY`: Your Supabase anonymous key
-- `VITE_MODULE_ADDRESS`: Your Aptos contract address
-- `VITE_APTOS_NETWORK`: Aptos network (devnet/mainnet)
+- `NEXT_PUBLIC_SUPABASE_URL`: Your Supabase project URL
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Your Supabase anonymous key
+- `NEXT_PUBLIC_MODULE_ADDRESS`: Your Aptos contract address
+- `NEXT_PUBLIC_APTOS_NETWORK`: Aptos network (devnet/mainnet)
 
 ## Project Structure
 

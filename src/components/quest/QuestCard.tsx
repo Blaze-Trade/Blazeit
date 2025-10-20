@@ -1,11 +1,13 @@
+"use client";
+
 import { Button } from "@/components/ui/button";
 import { useQuestStaking } from "@/hooks/useQuestStaking";
 import { useSupabaseQuests } from "@/hooks/useSupabaseQuests";
 import { cn, formatDuration } from "@/lib/utils";
 import { usePortfolioStore } from "@/stores/portfolioStore";
 import type { Quest } from "@shared/types";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 interface QuestCardProps {
@@ -18,21 +20,18 @@ const statusStyles = {
 };
 export function QuestCard({ quest }: QuestCardProps) {
   const { isConnected, address } = usePortfolioStore();
-  const navigate = useNavigate();
+  const router = useRouter();
   const [isJoining, setIsJoining] = useState(false);
   const [isJoined, setIsJoined] = useState(false);
-  const [isCheckingParticipation, setIsCheckingParticipation] = useState(false);
 
   const { joinQuest: joinQuestSupabase } = useSupabaseQuests();
-  const { joinQuest: joinQuestBlockchain, hasUserParticipated } =
-    useQuestStaking();
+  const { joinQuest: joinQuestBlockchain } = useQuestStaking();
 
   // Check database for participation on mount and when address/quest changes
   useEffect(() => {
     const checkParticipation = async () => {
       if (!address || !quest.id) return;
 
-      setIsCheckingParticipation(true);
       try {
         const { supabaseApi } = await import("@/lib/supabase-api");
         const result = await supabaseApi.quests.getQuestPortfolio(
@@ -43,8 +42,6 @@ export function QuestCard({ quest }: QuestCardProps) {
       } catch (error) {
         console.error("Error checking participation:", error);
         setIsJoined(false);
-      } finally {
-        setIsCheckingParticipation(false);
       }
     };
 
@@ -105,7 +102,7 @@ export function QuestCard({ quest }: QuestCardProps) {
       console.log(
         "📍 [QuestCard] Already joined or not upcoming, navigating..."
       );
-      navigate(`/quests/${quest.id}`);
+      router.push(`/quests/${quest.id}`);
       return;
     }
 
@@ -115,7 +112,7 @@ export function QuestCard({ quest }: QuestCardProps) {
 
     if (now >= startTime) {
       toast.error("Cannot join quest - registration period has ended");
-      navigate(`/quests/${quest.id}`);
+      router.push(`/quests/${quest.id}`);
       return;
     }
 
@@ -206,7 +203,7 @@ export function QuestCard({ quest }: QuestCardProps) {
       }
 
       // Navigate to quest detail page to build portfolio
-      navigate(`/quests/${quest.id}`);
+      router.push(`/quests/${quest.id}`);
     } catch (error: any) {
       console.error("❌ [QuestCard] Error joining quest:", error);
       toast.error("Failed to join quest");

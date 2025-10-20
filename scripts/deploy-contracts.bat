@@ -36,7 +36,7 @@ npm run move:publish
 echo ✅ Contracts deployed successfully!
 echo.
 echo 🔧 Next steps:
-echo 1. Update VITE_CONTRACT_ADDRESS in your .env file
+echo 1. Update NEXT_PUBLIC_CONTRACT_ADDRESS in your .env file
 echo 2. Initialize the contracts by calling the initialize functions
 echo 3. Test the deployment with your frontend
 echo.

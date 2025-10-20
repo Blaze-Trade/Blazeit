@@ -43,15 +43,25 @@ async function getMintLimit(fa_address: string): Promise<number> {
   try {
     const mintLimitRes = await aptosClient().view<[boolean, number]>({
       payload: {
-        function: `${AccountAddress.from(MODULE_ADDRESS)}::launchpad::get_mint_limit`,
+        function: `${AccountAddress.from(
+          MODULE_ADDRESS
+        )}::launchpad::get_mint_limit`,
         functionArguments: [fa_address],
       },
     });
 
     // Return the limit if it exists, otherwise return 0
     return mintLimitRes[0] ? mintLimitRes[1] : 0;
-  } catch (error) {
-    console.warn("Error getting mint limit (this is expected if contract doesn't exist):", error);
+  } catch (error: any) {
+    // Handle contract not deployed gracefully
+    if (
+      error?.message?.includes("404") ||
+      error?.message?.includes("Not Found")
+    ) {
+      console.info("Contract not deployed yet - using default mint limit");
+    } else {
+      console.warn("Error getting mint limit:", error?.message || error);
+    }
     return 0; // Default to 0 if there's an error
   }
 }
@@ -59,7 +69,7 @@ async function getMintLimit(fa_address: string): Promise<number> {
 /**
  * A react hook to get fungible asset data for a specific asset.
  */
-function useGetAssetData(fa_address?: string) {
+export function useGetAssetData(fa_address?: string) {
   const { account } = useWallet();
 
   return useQuery({
@@ -214,8 +224,13 @@ const getRegistry = async () => {
       },
     });
     return registry[0];
-  } catch (error) {
-    console.warn("Failed to get registry from contract, returning empty array:", error);
+  } catch (error: any) {
+    // Handle specific error cases more gracefully
+    if (error?.message?.includes("404") || error?.message?.includes("Not Found")) {
+      console.info("Contract not deployed yet - this is expected for new projects");
+    } else {
+      console.warn("Failed to get registry from contract:", error?.message || error);
+    }
     return [];
   }
 };
@@ -255,7 +270,6 @@ const getMetadata = async (
  * This combines the asset metadata with additional data for trading.
  */
 export function useBlockchainTokens() {
-  const { account } = useWallet();
   const assetMetadata = useGetAssetMetadata();
   const [tokens, setTokens] = useState<Token[]>([]);
   const [loading, setLoading] = useState(true);
@@ -282,7 +296,10 @@ export function useBlockchainTokens() {
             name: asset.name,
             price: 0, // We'll need to get this from a price API or calculate it
             change24h: 0, // We'll need to get this from a price API
-            marketCap: convertAmountFromOnChainToHumanReadable(asset.supply_v2 || 0, asset.decimals),
+            marketCap: convertAmountFromOnChainToHumanReadable(
+              asset.supply_v2 || 0,
+              asset.decimals
+            ),
             logoUrl: asset.icon_uri || "",
             address: asset.asset_type,
             decimals: asset.decimals,

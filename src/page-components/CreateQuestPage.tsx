@@ -1,6 +1,16 @@
+"use client";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { useQuestManagement } from "@/hooks/useQuestManagement";
@@ -10,9 +20,9 @@ import { formatDuration } from "@/lib/utils";
 import { usePortfolioStore } from "@/stores/portfolioStore";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Calculator, Calendar, Clock, Info, Wallet } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useMemo } from "react";
 import { useForm } from "react-hook-form";
-import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -64,10 +74,10 @@ const questSchema = z
 type QuestFormValues = z.infer<typeof questSchema>;
 
 export function CreateQuestPage() {
-  const navigate = useNavigate();
+  const router = useRouter();
   const { isConnected, address } = usePortfolioStore();
   const { createQuest: createQuestSupabase } = useSupabaseQuests();
-  const { createQuest, isCreating } = useQuestManagement();
+  const {  isCreating } = useQuestManagement();
   const {
     createQuest: createQuestBlockchain,
     isLoading: isBlockchainLoading,
@@ -253,7 +263,7 @@ export function CreateQuestPage() {
 
       if (supabaseResult.success) {
         toast.success("Quest created successfully on blockchain and database!");
-        navigate("/quests");
+        router.push("/quests");
       } else {
         toast.warning(
           "Quest created on blockchain but failed to save to database. Transaction: " +

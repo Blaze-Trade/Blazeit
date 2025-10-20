@@ -46,6 +46,7 @@ class SupabaseStorageService {
       }
 
       // Upload file to Supabase Storage
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { data, error } = await supabase.storage
         .from(STORAGE_BUCKET)
         .upload(fileName, file, {

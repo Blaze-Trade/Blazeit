@@ -1,3 +1,5 @@
+"use client";
+
 import { QuestLeaderboard } from "@/components/quest/QuestLeaderboard";
 import { QuestPortfolio as QuestPortfolioComponent } from "@/components/quest/QuestPortfolio";
 import { QuestTokenSelection } from "@/components/quest/QuestTokenSelection";
@@ -19,8 +21,8 @@ import { cn, formatDuration } from "@/lib/utils";
 import { usePortfolioStore } from "@/stores/portfolioStore";
 import type { LeaderboardEntry, Quest } from "@shared/types";
 import { ArrowLeft, Swords, Users } from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
 
 const statusStyles = {
   upcoming: "bg-blue-500 border-blue-500",
@@ -29,8 +31,9 @@ const statusStyles = {
 };
 
 export function QuestDetailPage() {
-  const { questId } = useParams<{ questId: string }>();
-  const navigate = useNavigate();
+  const params = useParams();
+  const questId = params?.questId as string;
+  const router = useRouter();
   const [quest, setQuest] = useState<Quest | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [participants, setParticipants] = useState<string[]>([]);
@@ -43,7 +46,6 @@ export function QuestDetailPage() {
   const { joinQuest } = useSupabaseQuests();
   const {
     joinQuest: joinQuestBlockchain,
-    hasUserParticipated,
     getUserParticipation,
     getQuestParticipants,
   } = useQuestStaking();
@@ -270,12 +272,7 @@ export function QuestDetailPage() {
         );
 
         // Step 2: Only save to database AFTER successful blockchain transaction
-        const dbResult = await joinQuest(
-          quest.id,
-          address,
-          quest.entryFee,
-          quest.creatorWalletAddress
-        );
+        const dbResult = await joinQuest(quest.id, address);
 
         if (dbResult.success) {
           toast.success("Successfully joined the quest!");
@@ -369,7 +366,7 @@ export function QuestDetailPage() {
       <div className="max-w-7xl mx-auto space-y-8">
         <Button
           variant="outline"
-          onClick={() => navigate("/quests")}
+          onClick={() => router.push("/quests")}
           className="border-2 border-blaze-black rounded-none h-12 px-4 flex items-center gap-2 font-bold uppercase text-lg hover:bg-blaze-black/5"
         >
           <ArrowLeft /> Back to Quests

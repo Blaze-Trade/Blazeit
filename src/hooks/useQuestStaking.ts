@@ -14,23 +14,24 @@ async function getAptosClient() {
 
 // Quest module configuration
 // NOTE: Devnet resets periodically, so you'll need to redeploy your contract
-// After redeploying, update the VITE_QUEST_MODULE_ADDRESS in your .env file
+// After redeploying, update the NEXT_PUBLIC_QUEST_MODULE_ADDRESS in your .env file
 const QUEST_MODULE_ADDRESS =
-  import.meta.env.VITE_QUEST_MODULE_ADDRESS ||
+  process.env.NEXT_PUBLIC_QUEST_MODULE_ADDRESS ||
   "0x5fb97dfeb76077901d88b70f6f02f9f164e83828cc173998f52d019777aa931a"; // Your last known address
 
 // Log warning if using default address
-if (!import.meta.env.VITE_QUEST_MODULE_ADDRESS) {
+if (!process.env.NEXT_PUBLIC_QUEST_MODULE_ADDRESS) {
   console.warn(
     "⚠️ Using default QUEST_MODULE_ADDRESS. This may not work if devnet was reset.\n" +
       "To fix:\n" +
       "1. Redeploy your quest_staking contract to devnet\n" +
-      "2. Create .env file with: VITE_QUEST_MODULE_ADDRESS=<your-new-address>\n" +
+      "2. Create .env file with: NEXT_PUBLIC_QUEST_MODULE_ADDRESS=<your-new-address>\n" +
       "3. Restart your dev server"
   );
 }
 
 // APT has 8 decimals (octas)
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const APT_DECIMALS = 8;
 const OCTAS_PER_APT = 100000000; // 10^8
 

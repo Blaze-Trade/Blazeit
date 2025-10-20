@@ -1,3 +1,5 @@
+"use client";
+
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Toaster, toast } from "@/components/ui/sonner";
@@ -19,6 +21,7 @@ import {
   Wallet,
   X,
 } from "lucide-react";
+import Image from "next/image";
 import { useState } from "react";
 
 export function WatchlistPage() {
@@ -140,7 +143,7 @@ export function WatchlistPage() {
           EMPTY WATCHLIST
         </h1>
         <p className="font-mono text-lg mt-2 max-w-md">
-          You haven't added any tokens to your watchlist. Swipe up on a token in
+          You haven&apos;t added any tokens to your watchlist. Swipe up on a token in
           the Trade page to add it!
         </p>
         <Button
@@ -205,11 +208,22 @@ export function WatchlistPage() {
                   >
                     <TableCell>
                       <div className="flex items-center gap-4">
-                        <img
-                          src={token.logoUrl}
-                          alt={token.name}
-                          className="w-10 h-10"
-                        />
+                        {token.logoUrl && (
+                          <Image
+                            src={token.logoUrl}
+                            alt={token.name}
+                            width={40}
+                            height={40}
+                            className="w-10 h-10"
+                          />
+                        )}
+                        {!token.logoUrl && (
+                          <div className="w-10 h-10 bg-blaze-black/10 flex items-center justify-center border-2 border-blaze-black">
+                            <span className="text-blaze-black/50 font-bold text-xs">
+                              {token.symbol.slice(0, 2)}
+                            </span>
+                          </div>
+                        )}
                         <div>
                           <p>{token.symbol}</p>
                           <p className="text-base font-normal text-blaze-black/60">

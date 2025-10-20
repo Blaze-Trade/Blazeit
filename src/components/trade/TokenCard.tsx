@@ -1,6 +1,7 @@
+import type { Token } from "@shared/types";
 import { motion } from "framer-motion";
-import { TrendingUp, TrendingDown } from "lucide-react";
-import type { Token } from '@shared/types';
+import { TrendingDown, TrendingUp } from "lucide-react";
+import Image from "next/image";
 interface TokenCardProps {
   token: Token;
 }
@@ -27,35 +28,74 @@ export function TokenCard({ token }: TokenCardProps) {
     >
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-4">
-          <img src={token.logoUrl} alt={token.name} className="w-16 h-16" />
+          {token.logoUrl && (
+            <Image
+              src={token.logoUrl}
+              alt={token.name}
+              width={64}
+              height={64}
+              className="w-16 h-16"
+            />
+          )}
+          {!token.logoUrl && (
+            <div className="w-16 h-16 bg-blaze-black/10 flex items-center justify-center border-2 border-blaze-black">
+              <span className="text-blaze-black/50 font-bold">
+                {token.symbol.slice(0, 2)}
+              </span>
+            </div>
+          )}
           <div>
             <h2 className="font-display text-5xl font-bold">{token.symbol}</h2>
-            <p className="font-mono text-lg text-blaze-black/70">{token.name}</p>
+            <p className="font-mono text-lg text-blaze-black/70">
+              {token.name}
+            </p>
           </div>
         </div>
-        <div className={`flex items-center font-mono font-bold text-2xl ${isPositiveChange ? 'text-green-600' : 'text-red-600'}`}>
-          {isPositiveChange ? <TrendingUp className="w-6 h-6 mr-1" /> : <TrendingDown className="w-6 h-6 mr-1" />}
+        <div
+          className={`flex items-center font-mono font-bold text-2xl ${
+            isPositiveChange ? "text-green-600" : "text-red-600"
+          }`}
+        >
+          {isPositiveChange ? (
+            <TrendingUp className="w-6 h-6 mr-1" />
+          ) : (
+            <TrendingDown className="w-6 h-6 mr-1" />
+          )}
           {token.change24h.toFixed(2)}%
         </div>
       </div>
       <div className="text-right">
         <p className="font-mono text-lg text-blaze-black/70">Price</p>
-        <h3 className="font-mono font-bold text-6xl tracking-tighter">${token.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 5 })}</h3>
+        <h3 className="font-mono font-bold text-6xl tracking-tighter">
+          $
+          {token.price.toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 5,
+          })}
+        </h3>
       </div>
       <div className="flex justify-between items-end">
         <div>
           <p className="font-mono text-lg text-blaze-black/70">Market Cap</p>
-          <p className="font-mono font-bold text-3xl">{formatCurrency(token.marketCap)}</p>
+          <p className="font-mono font-bold text-3xl">
+            {formatCurrency(token.marketCap)}
+          </p>
         </div>
         <div className="font-mono uppercase text-center">
           <p className="text-lg font-bold">↑</p>
           <p className="tracking-widest">Watchlist</p>
         </div>
       </div>
-      <div className="absolute top-1/2 -translate-y-1/2 left-4 -translate-x-full opacity-0 transition-opacity text-blaze-black/50 text-center" data-card-action="skip">
+      <div
+        className="absolute top-1/2 -translate-y-1/2 left-4 -translate-x-full opacity-0 transition-opacity text-blaze-black/50 text-center"
+        data-card-action="skip"
+      >
         <p className="font-display text-6xl font-bold">SKIP</p>
       </div>
-      <div className="absolute top-1/2 -translate-y-1/2 right-4 translate-x-full opacity-0 transition-opacity text-blaze-black/50 text-center" data-card-action="buy">
+      <div
+        className="absolute top-1/2 -translate-y-1/2 right-4 translate-x-full opacity-0 transition-opacity text-blaze-black/50 text-center"
+        data-card-action="buy"
+      >
         <p className="font-display text-6xl font-bold">BUY</p>
       </div>
     </motion.div>

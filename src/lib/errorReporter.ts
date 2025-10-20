@@ -570,6 +570,7 @@ class ErrorReporter {
       this.processQueue();
     } catch (err) {
       // Swallow reporting errors in client
+      console.error("[ErrorReporter] Failed to report error:", err);
     }
   }
 

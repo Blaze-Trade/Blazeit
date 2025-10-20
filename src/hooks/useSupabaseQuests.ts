@@ -1,13 +1,11 @@
 import { supabaseApi } from '@/lib/supabase-api';
 import type { Quest } from '@shared/types';
-import { useEffect, useState } from 'react';
-import { useAptos } from './useAptos';
+import { useEffect, useState } from "react";
 
 export function useSupabaseQuests() {
   const [quests, setQuests] = useState<Quest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { simulateTransaction, transferAPT } = useAptos();
 
   const fetchQuests = async () => {
     try {
@@ -18,10 +16,10 @@ export function useSupabaseQuests() {
       if (result.success && result.data) {
         setQuests(result.data.items);
       } else {
-        setError(result.error || 'Failed to fetch quests');
+        setError(result.error || "Failed to fetch quests");
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to fetch quests');
+      setError(err.message || "Failed to fetch quests");
     } finally {
       setLoading(false);
     }
@@ -62,12 +60,7 @@ export function useSupabaseQuests() {
     }
   };
 
-  const joinQuest = async (
-    questId: string,
-    walletAddress: string,
-    entryFee?: number,
-    creatorWalletAddress?: string
-  ) => {
+  const joinQuest = async (questId: string, walletAddress: string) => {
     try {
       // Note: Blockchain transaction is now handled by useQuestStaking hook
       // This function only handles database operations after successful blockchain transaction
@@ -147,15 +140,13 @@ export function useSupabaseQuests() {
       quantity: number;
       entryPrice: number;
       totalCost: number;
-    }>,
-    blockchainTxHash?: string
+    }>
   ) => {
     try {
       return await supabaseApi.quests.submitQuestPortfolio(
         questId,
         walletAddress,
-        tokenSelections,
-        blockchainTxHash
+        tokenSelections
       );
     } catch (err: any) {
       return {

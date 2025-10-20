@@ -1,3 +1,5 @@
+"use client";
+
 import { TokenCard } from "@/components/trade/TokenCard";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,10 +14,8 @@ import { Slider } from "@/components/ui/slider";
 import { Toaster, toast } from "@/components/ui/sonner";
 import { useAptos } from "@/hooks/useAptos";
 import { useBlockchainTokens } from "@/hooks/useBlockchainTokens";
-import { useSupabasePortfolio } from "@/hooks/useSupabasePortfolio";
 import { useSupabaseTokens } from "@/hooks/useSupabaseTokens";
 import { useSupabaseWatchlist } from "@/hooks/useSupabaseWatchlist";
-import { api } from "@/lib/api-client";
 import { CONTRACT_FUNCTIONS, createTransactionPayload } from "@/lib/contracts";
 import { usePortfolioStore } from "@/stores/portfolioStore";
 import {
@@ -25,8 +25,8 @@ import {
 import { MOCK_TOKENS } from "@shared/mock-data";
 import type { Token } from "@shared/types";
 import { ArrowUp, Heart, Loader2, Swords, Wallet, X } from "lucide-react";
+import Link from "next/link";
 import React, { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import TinderCard from "react-tinder-card";
 type SwipeDirection = "left" | "right" | "up";
 export function TradePage() {
@@ -59,7 +59,6 @@ export function TradePage() {
     loading: supabaseLoading,
     error: supabaseError,
   } = useSupabaseTokens();
-  const { buyToken: buyTokenSupabase } = useSupabasePortfolio(address);
   const { addToWatchlist: addToWatchlistSupabase } =
     useSupabaseWatchlist(address);
   const { simulateTransaction } = useAptos();
@@ -325,8 +324,11 @@ export function TradePage() {
                     await simulateTransaction(
                       `Buying ${quantity} ${token.symbol}`
                     );
-                    await api(`/api/quests/${activeQuest.id}/buy`, {
+                    await fetch(`/api/quests/${activeQuest.id}/buy`, {
                       method: "POST",
+                      headers: {
+                        "Content-Type": "application/json",
+                      },
                       body: JSON.stringify({
                         userId: address,
                         token,
@@ -467,7 +469,7 @@ export function TradePage() {
       {isInQuestMode && activeQuest && (
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-blaze-orange border-b-2 border-blaze-black p-2 text-center font-mono font-bold z-10 flex items-center justify-between">
           <Link
-            to={`/quests/${activeQuest.id}`}
+            href={`/quests/${activeQuest.id}`}
             className="flex items-center justify-center gap-2 text-blaze-black flex-grow"
           >
             <Swords className="w-5 h-5" />

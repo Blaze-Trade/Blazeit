@@ -41,7 +41,7 @@ async function getAptosClient() {
 export function useTokenCreation() {
   const { account } = useWallet();
   const launchpadIntegration = useLaunchpadIntegration();
-  const { executeCreateToken, isLoading } = launchpadIntegration;
+  const { executeCreateToken } = launchpadIntegration;
   const [isCreating, setIsCreating] = useState(false);
 
   const createToken = async (

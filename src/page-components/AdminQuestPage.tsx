@@ -1,3 +1,5 @@
+"use client";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,30 +11,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useQuestStaking } from "@/hooks/useQuestStaking";
 import { useSupabaseQuests } from "@/hooks/useSupabaseQuests";
-import { useSupabaseTokens } from "@/hooks/useSupabaseTokens";
 import { questAdminApi } from "@/lib/quest-admin-api";
 import { usePortfolioStore } from "@/stores/portfolioStore";
 import type { Quest } from "@shared/types";
-import {
-  Calculator,
-  Crown,
-  Shield,
-  Users,
-} from "lucide-react";
+import { Calculator, Crown, Shield, Users } from "lucide-react";
 import { toast } from "sonner";
 
 export function AdminQuestPage() {
   const { address, isConnected } = usePortfolioStore();
   const { quests, loading, error } = useSupabaseQuests();
-  const { tokens } = useSupabaseTokens();
-  const { declareWinner, getQuestParticipants } = useQuestStaking();
-  // PNL calculation and leaderboard now handled by Supabase
 
-  // Quest details are now handled by Supabase
-
-  // Check if connected wallet is admin (you can hardcode admin addresses)
   const ADMIN_ADDRESSES = [
     "0x9cc90ff526e7e8bdb3fc8d105b8e8abb73df9105888d46249499175c7085ef92",
   ];
@@ -63,14 +52,16 @@ export function AdminQuestPage() {
     }
   };
 
-  const handleCalculateResults = async (quest: Quest) => {
+  const handleCalculateResults = async () => {
     // Results are automatically calculated when quest ends
     toast.info("Results are automatically calculated when quest ends");
   };
 
-  const handleDeclareWinner = async (quest: Quest) => {
+  const handleDeclareWinner = async () => {
     // Winners are automatically declared and prizes distributed when quest ends
-    toast.info("Winners are automatically declared and prizes distributed when quest ends");
+    toast.info(
+      "Winners are automatically declared and prizes distributed when quest ends"
+    );
   };
 
   if (!isConnected) {
@@ -214,7 +205,7 @@ export function AdminQuestPage() {
                           </Button>
                           <Button
                             size="sm"
-                            onClick={() => handleCalculateResults(quest)}
+                            onClick={() => handleCalculateResults()}
                             className="rounded-none border border-blaze-black bg-blaze-orange hover:bg-blaze-black hover:text-white"
                           >
                             <Calculator className="w-4 h-4 mr-1" />
@@ -225,7 +216,7 @@ export function AdminQuestPage() {
                       {quest.status === "ended" && (
                         <Button
                           size="sm"
-                          onClick={() => handleDeclareWinner(quest)}
+                          onClick={() => handleDeclareWinner()}
                           className="rounded-none border border-blaze-black bg-green-600 hover:bg-green-700 text-white"
                         >
                           <Crown className="w-4 h-4 mr-1" />
@@ -259,16 +250,20 @@ export function AdminQuestPage() {
                 </p>
                 <ul className="space-y-2">
                   <li>
-                    • Click "Start" to begin a quest and snapshot token prices
+                    • Click &quot;Start&quot; to begin a quest and snapshot
+                    token prices
                   </li>
                   <li>
-                    • Click "End" when quest time is up to calculate final
-                    prices
+                    • Click &quot;End&quot; when quest time is up to calculate
+                    final prices
                   </li>
-                  <li>• Click "Calculate" to generate leaderboard from PNL</li>
                   <li>
-                    • Click "Declare Winner" to send prize to rank #1 on
-                    blockchain
+                    • Click &quot;Calculate&quot; to generate leaderboard from
+                    PNL
+                  </li>
+                  <li>
+                    • Click &quot;Declare Winner&quot; to send prize to rank #1
+                    on blockchain
                   </li>
                 </ul>
               </div>
@@ -279,4 +274,3 @@ export function AdminQuestPage() {
     </div>
   );
 }
-

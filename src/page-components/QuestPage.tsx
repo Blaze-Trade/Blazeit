@@ -1,3 +1,5 @@
+"use client";
+
 import { QuestCard } from "@/components/quest/QuestCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Toaster } from "@/components/ui/sonner";

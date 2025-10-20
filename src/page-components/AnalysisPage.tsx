@@ -1,3 +1,5 @@
+"use client";
+
 import {
   AlertDialog,
   AlertDialogAction,
@@ -9,12 +11,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Input } from "@/components/ui/input";
-import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import { Slider } from "@/components/ui/slider";
 import {
   Table,
   TableBody,
@@ -45,9 +47,12 @@ import {
   Wallet,
   X,
 } from "lucide-react";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 export function AnalysisPage() {
+  const router = useRouter();
   const { isConnected, address } = usePortfolioStore();
   const {
     holdings: supabaseHoldings,
@@ -164,15 +169,15 @@ export function AnalysisPage() {
   }, [dataSource, blockchainHoldings, supabaseHoldings]);
   const handleSell = async () => {
     if (sellCandidate) {
-      const quantityToSell = Math.max(0, Math.min(sellCandidate.quantity, sellAmount || 0));
+      const quantityToSell = Math.max(
+        0,
+        Math.min(sellCandidate.quantity, sellAmount || 0)
+      );
       if (quantityToSell <= 0) {
         toast.error("Enter a valid amount to sell");
         return;
       }
-      const result = await sellTokenSupabase(
-        sellCandidate.id,
-        quantityToSell
-      );
+      const result = await sellTokenSupabase(sellCandidate.id, quantityToSell);
       if (result.success) {
         toast.success(
           `Sold ${quantityToSell.toFixed(2)} ${sellCandidate.symbol}`
@@ -192,7 +197,7 @@ export function AnalysisPage() {
       await Promise.all([refetchBlockchain(), refetchSupabase()]);
       toast.success("Portfolio updated from blockchain and database");
     } catch (error) {
-      toast.error("Failed to refresh portfolio");
+      toast.error("Failed to refresh portfolio: " + error);
     } finally {
       setRefreshing(false);
     }
@@ -224,7 +229,7 @@ export function AnalysisPage() {
           EMPTY PORTFOLIO
         </h1>
         <p className="font-mono text-lg mt-2 max-w-md">
-          You don't have any holdings yet. Go to the Trade page to start
+          You don&apos;t have any holdings yet. Go to the Trade page to start
           building your portfolio!
         </p>
       </div>
@@ -478,11 +483,22 @@ export function AnalysisPage() {
               {portfolioData.bestPerformer ? (
                 <div className="space-y-3">
                   <div className="flex items-center gap-3">
-                    <img
-                      src={portfolioData.bestPerformer.logoUrl}
-                      alt={portfolioData.bestPerformer.name}
-                      className="w-10 h-10"
-                    />
+                    {portfolioData.bestPerformer.logoUrl && (
+                      <Image
+                        src={portfolioData.bestPerformer.logoUrl}
+                        alt={portfolioData.bestPerformer.name}
+                        width={40}
+                        height={40}
+                        className="w-10 h-10"
+                      />
+                    )}
+                    {!portfolioData.bestPerformer.logoUrl && (
+                      <div className="w-10 h-10 bg-blaze-black/10 flex items-center justify-center border-2 border-blaze-black">
+                        <span className="text-blaze-black/50 font-bold text-xs">
+                          {portfolioData.bestPerformer.symbol.slice(0, 2)}
+                        </span>
+                      </div>
+                    )}
                     <div>
                       <p className="font-mono font-bold text-lg">
                         {portfolioData.bestPerformer.symbol}
@@ -560,11 +576,22 @@ export function AnalysisPage() {
               {portfolioData.worstPerformer ? (
                 <div className="space-y-3">
                   <div className="flex items-center gap-3">
-                    <img
-                      src={portfolioData.worstPerformer.logoUrl}
-                      alt={portfolioData.worstPerformer.name}
-                      className="w-10 h-10"
-                    />
+                    {portfolioData.worstPerformer.logoUrl && (
+                      <Image
+                        src={portfolioData.worstPerformer.logoUrl}
+                        alt={portfolioData.worstPerformer.name}
+                        width={40}
+                        height={40}
+                        className="w-10 h-10"
+                      />
+                    )}
+                    {!portfolioData.worstPerformer.logoUrl && (
+                      <div className="w-10 h-10 bg-blaze-black/10 flex items-center justify-center border-2 border-blaze-black">
+                        <span className="text-blaze-black/50 font-bold text-xs">
+                          {portfolioData.worstPerformer.symbol.slice(0, 2)}
+                        </span>
+                      </div>
+                    )}
                     <div>
                       <p className="font-mono font-bold text-lg">
                         {portfolioData.worstPerformer.symbol}
@@ -642,11 +669,22 @@ export function AnalysisPage() {
                     >
                       <TableCell>
                         <div className="flex items-center gap-4">
-                          <img
-                            src={holding.logoUrl}
-                            alt={holding.name}
-                            className="w-12 h-12"
-                          />
+                          {holding.logoUrl && (
+                            <Image
+                              src={holding.logoUrl}
+                              alt={holding.name}
+                              width={48}
+                              height={48}
+                              className="w-12 h-12"
+                            />
+                          )}
+                          {!holding.logoUrl && (
+                            <div className="w-12 h-12 bg-blaze-black/10 flex items-center justify-center border-2 border-blaze-black">
+                              <span className="text-blaze-black/50 font-bold text-xs">
+                                {holding.symbol.slice(0, 2)}
+                              </span>
+                            </div>
+                          )}
                           <div>
                             <p className="font-bold text-xl">
                               {holding.symbol}
@@ -767,12 +805,16 @@ export function AnalysisPage() {
                             className="rounded-none border-2 border-blaze-black w-36"
                           />
                           <span className="text-sm text-blaze-black/70">
-                            Max: {sellCandidate.quantity.toFixed(4)} {sellCandidate.symbol}
+                            Max: {sellCandidate.quantity.toFixed(4)}{" "}
+                            {sellCandidate.symbol}
                           </span>
                         </div>
                         <div className="text-sm text-blaze-black/70">
                           Est. proceeds: $
-                          {formatValue((sellAmount || 0) * (sellCandidate.value / sellCandidate.quantity))}
+                          {formatValue(
+                            (sellAmount || 0) *
+                              (sellCandidate.value / sellCandidate.quantity)
+                          )}
                         </div>
                       </div>
                     )}
@@ -870,7 +912,7 @@ export function AnalysisPage() {
                 <Button
                   variant="outline"
                   className="rounded-none border-2 border-blaze-black bg-blaze-white text-blaze-black font-bold uppercase hover:bg-blaze-black hover:text-blaze-white h-12"
-                  onClick={() => (window.location.href = "/trade")}
+                  onClick={() => router.push("/")}
                 >
                   <TrendingUp className="w-4 h-4 mr-2" />
                   Trade
@@ -878,7 +920,7 @@ export function AnalysisPage() {
                 <Button
                   variant="outline"
                   className="rounded-none border-2 border-blaze-black bg-blaze-white text-blaze-black font-bold uppercase hover:bg-blaze-black hover:text-blaze-white h-12"
-                  onClick={() => (window.location.href = "/watchlist")}
+                  onClick={() => router.push("/watchlist")}
                 >
                   <Eye className="w-4 h-4 mr-2" />
                   Watchlist
@@ -886,7 +928,7 @@ export function AnalysisPage() {
                 <Button
                   variant="outline"
                   className="rounded-none border-2 border-blaze-black bg-blaze-white text-blaze-black font-bold uppercase hover:bg-blaze-black hover:text-blaze-white h-12"
-                  onClick={() => (window.location.href = "/quests")}
+                  onClick={() => router.push("/quests")}
                 >
                   <Award className="w-4 h-4 mr-2" />
                   Quests

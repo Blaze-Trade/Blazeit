@@ -294,7 +294,7 @@ const questApi = {
 
       return { success: true, data: { items: sortedQuests, next: null } };
     } catch (error) {
-      return { success: false, error: "Failed to fetch quests" };
+      return { success: false, error: "Failed to fetch quests: " + error };
     }
   },
 
@@ -331,7 +331,7 @@ const questApi = {
 
       return { success: true, data: quest };
     } catch (error) {
-      return { success: false, error: "Failed to fetch quest details" };
+      return { success: false, error: "Failed to fetch quest details" + error };
     }
   },
 
@@ -521,6 +521,10 @@ const questApi = {
         .eq("user_id", user.id)
         .maybeSingle();
 
+      if (participantError) {
+        return { success: false, error: participantError.message };
+      }
+
       if (!participant) {
         return { success: false, error: "User has not joined this quest" };
       }
@@ -535,6 +539,10 @@ const questApi = {
         .eq("user_id", user.id)
         .eq("token_id", token.id)
         .maybeSingle();
+
+      if (holdingError) {
+        return { success: false, error: holdingError.message };
+      }
 
       if (existingHolding) {
         // Update existing holding
@@ -659,8 +667,7 @@ const questApi = {
       quantity: number;
       entryPrice: number;
       totalCost: number;
-    }>,
-    blockchainTxHash?: string
+    }>
   ): Promise<ApiResponse<void>> {
     try {
       // Convert token selections to the format expected by the RPC function

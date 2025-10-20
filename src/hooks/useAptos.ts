@@ -73,8 +73,8 @@ export function useAptos() {
         } else if (error) {
           errorMessage = String(error);
         }
-      } catch (parseError) {
-        errorMessage = "Error parsing error message";
+      } catch (error) {
+        errorMessage = "Error parsing error message: " + error;
       }
 
       const isUserRejection =

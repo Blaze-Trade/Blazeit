@@ -1,3 +1,5 @@
+"use client";
+
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -10,6 +12,7 @@ import {
 import { supabaseApi } from "@/lib/supabase-api";
 import type { QuestPortfolio } from "@shared/types";
 import { TrendingDown, TrendingUp } from "lucide-react";
+import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 interface QuestPortfolioProps {
@@ -79,10 +82,11 @@ export function QuestPortfolio({ questId, userId }: QuestPortfolioProps) {
       {!portfolio || portfolio.holdings.length === 0 ? (
         <div className="p-6 text-center">
           <p className="font-mono text-lg text-blaze-black/70 mb-4">
-            You haven't selected your portfolio yet.
+            You haven&apos;t selected your portfolio yet.
           </p>
           <p className="font-mono text-sm text-blaze-black/50">
-            Click "Build Portfolio" to select your tokens for this quest.
+            Click &quot;Build Portfolio&quot; to select your tokens for this
+            quest.
           </p>
         </div>
       ) : (
@@ -153,11 +157,22 @@ export function QuestPortfolio({ questId, userId }: QuestPortfolioProps) {
                   >
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <img
-                          src={holding.logoUrl}
-                          alt={holding.name}
-                          className="w-8 h-8"
-                        />
+                        {holding.logoUrl && (
+                          <Image
+                            src={holding.logoUrl}
+                            alt={holding.name}
+                            width={32}
+                            height={32}
+                            className="w-8 h-8"
+                          />
+                        )}
+                        {!holding.logoUrl && (
+                          <div className="w-8 h-8 bg-blaze-black/10 flex items-center justify-center border-2 border-blaze-black">
+                            <span className="text-blaze-black/50 font-bold text-xs">
+                              {holding.symbol.slice(0, 2)}
+                            </span>
+                          </div>
+                        )}
                         <div>
                           <p className="font-bold">{holding.symbol}</p>
                           <p className="text-xs text-blaze-black/60">

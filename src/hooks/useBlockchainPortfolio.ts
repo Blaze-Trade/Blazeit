@@ -3,27 +3,12 @@ import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import type { Holding } from "@shared/types";
 import { useCallback, useEffect, useState } from "react";
 
-interface FungibleAssetBalance {
-  amount: number;
-  asset_type: string;
-  is_frozen: boolean;
-  is_primary: boolean;
-  last_transaction_timestamp: string;
-  last_transaction_version: string;
-  token_properties: {
-    name: string;
-    symbol: string;
-    decimals: number;
-    icon_uri?: string;
-  };
-}
-
 interface FungibleAssetMetadata {
   asset_type: string;
   name: string;
   symbol: string;
   decimals: number;
-  icon_uri?: string;
+  icon_uri?: string | null;
   maximum_v2?: number;
   supply_v2?: number;
 }
