@@ -6,11 +6,14 @@ Blaze It is a gamified crypto trading and portfolio management platform built on
 
 ## Key Features
 
--   **Swipe-Based Trading:** An intuitive, 'Tinder-for-tokens' interface. Swipe right to buy, left to skip, and up to watchlist.
+-   **Swipe-Based Trading:** An intuitive, 'Tinder-for-tokens' interface. Swipe right to buy, left to skip, up to watchlist, and down for token info.
+-   **Bancor Bonding Curves (V2):** Tokens start on automated bonding curves with dynamic pricing based on supply and demand.
+-   **Automatic DEX Migration:** Tokens automatically migrate to Hyperion DEX at $75k market cap with full liquidity.
+-   **Token Creation:** Create your own tokens with customizable bonding curves, social links, and metadata.
 -   **Competitive Quests:** Join time-based portfolio-building challenges, compete against other users, and win from prize pools.
 -   **Portfolio Analysis:** A minimalist dashboard to track your portfolio value, profit/loss, and current holdings.
 -   **Brutalist UI/UX:** A stark, visually striking design with oversized typography, high-contrast colors, and sharp geometric forms.
--   **Aptos Wallet Integration:** Securely connect your Aptos-compatible wallet to manage your assets.
+-   **Aptos Wallet Integration:** Securely connect your Aptos-compatible wallets to manage your assets.
 -   **Mobile-First Design:** A fully responsive layout optimized for a seamless experience on any device.
 
 ## Technology Stack
@@ -104,7 +107,7 @@ Make sure to configure the following environment variables in your deployment pl
 
 - `NEXT_PUBLIC_SUPABASE_URL`: Your Supabase project URL
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Your Supabase anonymous key
-- `NEXT_PUBLIC_MODULE_ADDRESS`: Your Aptos contract address
+- `NEXT_PUBLIC_CONTRACT_ADDRESS`: Your Aptos contract address
 - `NEXT_PUBLIC_APTOS_NETWORK`: Aptos network (devnet/mainnet)
 
 ## Project Structure
@@ -154,3 +157,33 @@ The blockchain integration is currently in development:
 - **Development Mode**: Currently uses demo/mock tokens when blockchain integration is unavailable
 
 **Note**: The blockchain integration requires a deployed Aptos contract with the correct module address. If you see console warnings about contract calls failing, this is expected behavior when the contract is not deployed or the module address is incorrect.
+
+## Launchpad V2 (pump.fun Model)
+
+Blaze It now features a **Launchpad V2** system inspired by pump.fun:
+
+### How It Works
+
+1. **Token Creation**: Creators deposit initial APT (e.g., 0.1 APT) to bootstrap a Bancor bonding curve
+2. **Bonding Curve Trading**: Users buy/sell tokens at dynamic prices determined by the curve
+3. **Price Discovery**: Price increases as more tokens are purchased, providing early buyers with rewards
+4. **Automatic Migration**: When market cap reaches $75,000, the token automatically migrates to Hyperion DEX
+5. **DEX Trading**: All collected APT becomes DEX liquidity, enabling full decentralized trading
+
+### Key Benefits
+
+- **Immediate Liquidity**: No waiting for liquidity providers
+- **Fair Price Discovery**: Bonding curve ensures transparent pricing
+- **Automatic Graduation**: Successful tokens automatically migrate to DEX
+- **No Rug Pulls**: Liquidity is locked in the bonding curve or DEX
+- **Creator Incentives**: Creators benefit from bonding curve fees
+
+### Technical Details
+
+- **Bonding Curve**: Bancor formula with configurable reserve ratio (1-100%)
+- **Oracle Integration**: Real-time APT/USD pricing for market cap calculations
+- **Fee Structure**: 1% buy/sell fees (configurable by admin)
+- **Migration Threshold**: Default $75,000 market cap (customizable per token)
+- **DEX Integration**: Hyperion DEX for post-migration trading
+
+See [LAUNCHPAD_V2_MIGRATION.md](./LAUNCHPAD_V2_MIGRATION.md) for detailed migration guide.

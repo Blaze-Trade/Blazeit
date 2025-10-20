@@ -1,3 +1,4 @@
+import { getAptosNetwork } from "@/lib/constants";
 import {
   APT_DECIMALS,
   convertAmountFromHumanReadableToOnChain,
@@ -16,7 +17,7 @@ async function getAptosClient() {
   const mod = await import("@aptos-labs/ts-sdk");
 
   const config = new mod.AptosConfig({
-    network: mod.Network.DEVNET,
+    network: getAptosNetwork(),
   });
 
   aptosSingleton = new mod.Aptos(config);
@@ -24,8 +25,7 @@ async function getAptosClient() {
 }
 
 // Contract configuration
-const LAUNCHPAD_ADDRESS =
-  "0x5fb97dfeb76077901d88b70f6f02f9f164e83828cc173998f52d019777aa931a";
+const LAUNCHPAD_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS;
 
 // Type definitions matching the reference implementation
 export type CreateTokenArguments = {

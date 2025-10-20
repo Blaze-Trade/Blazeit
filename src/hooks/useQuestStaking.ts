@@ -1,3 +1,4 @@
+import { getAptosNetwork } from "@/lib/constants";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
@@ -7,25 +8,25 @@ let aptosSingleton: any | null = null;
 async function getAptosClient() {
   if (aptosSingleton) return aptosSingleton;
   const mod = await import("@aptos-labs/ts-sdk");
-  const config = new mod.AptosConfig({ network: mod.Network.DEVNET });
+  const config = new mod.AptosConfig({ network: getAptosNetwork() });
   aptosSingleton = new mod.Aptos(config);
   return aptosSingleton;
 }
 
 // Quest module configuration
 // NOTE: Devnet resets periodically, so you'll need to redeploy your contract
-// After redeploying, update the NEXT_PUBLIC_QUEST_MODULE_ADDRESS in your .env file
+// After redeploying, update the NEXT_PUBLIC_CONTRACT_ADDRESS in your .env file
 const QUEST_MODULE_ADDRESS =
-  process.env.NEXT_PUBLIC_QUEST_MODULE_ADDRESS ||
+  process.env.NEXT_PUBLIC_CONTRACT_ADDRESS ||
   "0x5fb97dfeb76077901d88b70f6f02f9f164e83828cc173998f52d019777aa931a"; // Your last known address
 
 // Log warning if using default address
-if (!process.env.NEXT_PUBLIC_QUEST_MODULE_ADDRESS) {
+if (!process.env.NEXT_PUBLIC_CONTRACT_ADDRESS) {
   console.warn(
     "⚠️ Using default QUEST_MODULE_ADDRESS. This may not work if devnet was reset.\n" +
       "To fix:\n" +
       "1. Redeploy your quest_staking contract to devnet\n" +
-      "2. Create .env file with: NEXT_PUBLIC_QUEST_MODULE_ADDRESS=<your-new-address>\n" +
+      "2. Create .env file with: NEXT_PUBLIC_CONTRACT_ADDRESS=<your-new-address>\n" +
       "3. Restart your dev server"
   );
 }
@@ -450,5 +451,3 @@ export function useQuestStaking() {
     contractAddress: QUEST_MODULE_ADDRESS,
   };
 }
-
-

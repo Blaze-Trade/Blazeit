@@ -1,6 +1,7 @@
 "use client";
 
 import { TokenCard } from "@/components/trade/TokenCard";
+import { TokenInfoModal } from "@/components/trade/TokenInfoModal";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -14,27 +15,30 @@ import { Slider } from "@/components/ui/slider";
 import { Toaster, toast } from "@/components/ui/sonner";
 import { useAptos } from "@/hooks/useAptos";
 import { useBlockchainTokens } from "@/hooks/useBlockchainTokens";
+import { useLaunchpadV2 } from "@/hooks/useLaunchpadV2";
 import { useSupabaseTokens } from "@/hooks/useSupabaseTokens";
 import { useSupabaseWatchlist } from "@/hooks/useSupabaseWatchlist";
-import { CONTRACT_FUNCTIONS, createTransactionPayload } from "@/lib/contracts";
+import { buildSwapAptForTokenPayload } from "@/lib/hyperion-dex";
 import { usePortfolioStore } from "@/stores/portfolioStore";
-import {
-  InputTransactionData,
-  useWallet,
-} from "@aptos-labs/wallet-adapter-react";
-import { MOCK_TOKENS } from "@shared/mock-data";
+import { useWallet } from "@aptos-labs/wallet-adapter-react";
+// Removed MOCK_TOKENS import - no longer using fallback mock data
 import type { Token } from "@shared/types";
-import { ArrowUp, Heart, Loader2, Swords, Wallet, X } from "lucide-react";
+import { ArrowUp, Heart, Info, Loader2, Swords, Wallet, X } from "lucide-react";
 import Link from "next/link";
 import React, { useEffect, useMemo, useState } from "react";
 import TinderCard from "react-tinder-card";
-type SwipeDirection = "left" | "right" | "up";
+
+type SwipeDirection = "left" | "right" | "up" | "down";
 export function TradePage() {
   const [tokens, setTokens] = useState<Token[]>([]);
   const [initialTokens, setInitialTokens] = useState<Token[]>([]);
   const [showBuyDialog, setShowBuyDialog] = useState(false);
+  const [showInfoModal, setShowInfoModal] = useState(false);
   const [pendingBuyToken, setPendingBuyToken] = useState<Token | null>(null);
-  const [buyQuantity, setBuyQuantity] = useState<number>(10); // Start with 10 tokens (safe for 0 decimal tokens)
+  const [infoToken, setInfoToken] = useState<Token | null>(null);
+  const [buyQuantity, setBuyQuantity] = useState<number>(0.1);
+  const [slippageTolerance, setSlippageTolerance] = useState<number>(1); // 1% default
+  const [deadline, setDeadline] = useState<number>(5); // 5 minutes default
 
   const {
     isConnected,
@@ -45,8 +49,11 @@ export function TradePage() {
     exitQuestMode,
   } = usePortfolioStore();
 
-  // Get signAndSubmitTransaction from wallet
+  // Get wallet functions
   const { signAndSubmitTransaction } = useWallet();
+
+  // V2 Launchpad integration
+  const launchpadV2 = useLaunchpadV2();
 
   // Use blockchain tokens as primary source, Supabase as fallback
   const {
@@ -66,30 +73,39 @@ export function TradePage() {
 
   // Update tokens when either source is loaded
   useEffect(() => {
+    console.log("🔄 TradePage useEffect triggered:", {
+      blockchainTokens: blockchainTokens.length,
+      supabaseTokens: supabaseTokens.length,
+      blockchainLoading,
+      supabaseLoading,
+      blockchainTokensData: blockchainTokens,
+      supabaseTokensData: supabaseTokens,
+    });
+
     let tokensToUse: Token[] = [];
 
     if (blockchainTokens.length > 0) {
       tokensToUse = blockchainTokens;
+      console.log("✅ Using blockchain tokens:", tokensToUse.length);
     } else if (supabaseTokens.length > 0) {
       tokensToUse = supabaseTokens;
-    } else if (
-      !blockchainLoading &&
-      !supabaseLoading &&
-      blockchainTokens.length === 0 &&
-      supabaseTokens.length === 0
-    ) {
-      // Fallback to mock tokens if no tokens are available from any source
-      console.log(
-        "No tokens found from blockchain or Supabase, using mock tokens as fallback"
-      );
-      tokensToUse = MOCK_TOKENS;
+      console.log("✅ Using Supabase tokens:", tokensToUse.length);
+    } else {
+      console.log("❌ No tokens from any source");
     }
+    // No fallback to mock tokens - show empty state instead
 
     if (tokensToUse.length > 0) {
       // Shuffle tokens for variety
       const shuffledTokens = [...tokensToUse].sort(() => Math.random() - 0.5);
+      console.log("🎲 Setting shuffled tokens:", shuffledTokens.length);
       setTokens(shuffledTokens);
       setInitialTokens(shuffledTokens);
+    } else {
+      // Clear tokens if none available
+      console.log("🧹 Clearing tokens - showing empty state");
+      setTokens([]);
+      setInitialTokens([]);
     }
   }, [blockchainTokens, supabaseTokens, blockchainLoading, supabaseLoading]);
   const childRefs = useMemo(
@@ -106,6 +122,14 @@ export function TradePage() {
     }
   };
   const swiped = async (direction: SwipeDirection, token: Token) => {
+    // Down swipe shows info modal (no wallet required)
+    if (direction === "down") {
+      setInfoToken(token);
+      setShowInfoModal(true);
+      restoreCard(token.id);
+      return;
+    }
+
     if (!isConnected || !address) {
       toast.error("Please connect your wallet to trade.");
       restoreCard(token.id);
@@ -113,7 +137,7 @@ export function TradePage() {
     }
 
     if (direction === "right") {
-      // Open quantity selector dialog instead of immediately buying
+      // Open quantity selector dialog for buying
       setPendingBuyToken(token);
       setBuyQuantity(1);
       setShowBuyDialog(true);
@@ -193,19 +217,53 @@ export function TradePage() {
       );
     }
     if (tokens.length === 0) {
+      // Determine the appropriate message based on loading state
+      const isStillLoading = blockchainLoading || supabaseLoading;
+      const hasNoTokens =
+        !isStillLoading &&
+        blockchainTokens.length === 0 &&
+        supabaseTokens.length === 0;
+
       return (
         <div className="w-full h-full flex flex-col items-center justify-center bg-blaze-white border-2 border-blaze-black p-6 text-center">
-          <h2 className="font-display text-4xl font-bold">ALL SWIPED</h2>
-          <p className="font-mono text-lg mt-2">
-            Check back later for more tokens.
-          </p>
-          {blockchainTokens.length === 0 &&
-            !blockchainLoading &&
-            !supabaseLoading && (
-              <p className="font-mono text-sm mt-2 text-gray-600">
-                Using demo tokens (no blockchain tokens found)
+          {isStillLoading ? (
+            <>
+              <Loader2 className="w-16 h-16 animate-spin text-blaze-orange" />
+              <h2 className="font-display text-4xl font-bold mt-4">LOADING</h2>
+              <p className="font-mono text-lg mt-2">
+                Fetching tokens from blockchain...
               </p>
-            )}
+            </>
+          ) : hasNoTokens ? (
+            <>
+              <Swords className="w-24 h-24 text-blaze-black/30" />
+              <h2 className="font-display text-4xl font-bold mt-4">
+                NO TOKENS FOUND
+              </h2>
+              <p className="font-mono text-lg mt-2 text-blaze-black/70">
+                No tokens have been created yet.
+              </p>
+              <p className="font-mono text-sm mt-4 text-blaze-black/60">
+                Be the first to launch a token!
+              </p>
+              <Link
+                href="/create-token"
+                className="mt-6 px-6 py-3 bg-blaze-orange border-2 border-blaze-black font-mono font-bold hover:bg-blaze-orange/80 transition-colors"
+              >
+                CREATE TOKEN
+              </Link>
+            </>
+          ) : (
+            <>
+              <h2 className="font-display text-4xl font-bold">ALL SWIPED</h2>
+              <p className="font-mono text-lg mt-2">
+                You've swiped through all available tokens.
+              </p>
+              <p className="font-mono text-sm mt-4 text-blaze-black/60">
+                Check back later for more!
+              </p>
+            </>
+          )}
         </div>
       );
     }
@@ -218,7 +276,7 @@ export function TradePage() {
           key={token.id}
           onSwipe={(dir) => swiped(dir as SwipeDirection, token)}
           onCardLeftScreen={() => outOfFrame(token.name)}
-          preventSwipe={["down"]}
+          preventSwipe={[]}
         >
           <TokenCard token={token} />
         </TinderCard>
@@ -228,37 +286,57 @@ export function TradePage() {
   return (
     <div className="w-full h-full flex flex-col items-center justify-center relative p-4">
       <Toaster richColors closeButton />
+
+      {/* Token Info Modal */}
+      <TokenInfoModal
+        token={infoToken}
+        open={showInfoModal}
+        onOpenChange={setShowInfoModal}
+      />
+
+      {/* Buy Dialog */}
       <Dialog open={showBuyDialog} onOpenChange={setShowBuyDialog}>
         <DialogContent className="rounded-none border-2 border-blaze-black bg-blaze-white">
           <DialogHeader>
             <DialogTitle className="font-display text-3xl">
               Buy {pendingBuyToken?.symbol}
             </DialogTitle>
+            {pendingBuyToken?.migrationCompleted && (
+              <p className="font-mono text-xs text-green-600">
+                Trading on Hyperion DEX
+              </p>
+            )}
+            {!pendingBuyToken?.migrationCompleted && (
+              <p className="font-mono text-xs text-blaze-orange">
+                Trading on Bonding Curve
+              </p>
+            )}
           </DialogHeader>
           <div className="space-y-4">
+            {/* Quantity */}
             <div className="space-y-2">
               <p className="font-mono text-sm text-blaze-black/70">Quantity</p>
               <div className="px-1">
                 <Slider
                   value={[buyQuantity]}
                   min={1}
-                  max={1000}
-                  step={1}
+                  max={100}
+                  step={0.1}
                   onValueChange={(v) => setBuyQuantity(Number(v[0]))}
                 />
               </div>
               <div className="flex items-center gap-2">
                 <Input
                   type="number"
-                  step="1"
-                  min="1"
-                  max="10000"
+                  step="0.1"
+                  min="0.1"
+                  max="100"
                   value={buyQuantity}
                   onChange={(e) =>
                     setBuyQuantity(
                       Math.min(
-                        10000,
-                        Math.max(1, parseFloat(e.target.value) || 1)
+                        100,
+                        Math.max(0.1, parseFloat(e.target.value) || 0.1)
                       )
                     )
                   }
@@ -269,6 +347,54 @@ export function TradePage() {
                     ≈ ${(buyQuantity * pendingBuyToken.price).toFixed(2)}
                   </span>
                 )}
+              </div>
+            </div>
+
+            {/* Slippage Tolerance */}
+            <div className="space-y-2">
+              <p className="font-mono text-sm text-blaze-black/70">
+                Slippage Tolerance
+              </p>
+              <div className="flex gap-2">
+                {[0.1, 0.5, 1, 5].map((pct) => (
+                  <Button
+                    key={pct}
+                    type="button"
+                    variant={slippageTolerance === pct ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setSlippageTolerance(pct)}
+                    className={`rounded-none border-2 border-blaze-black ${
+                      slippageTolerance === pct
+                        ? "bg-blaze-orange text-blaze-black"
+                        : "bg-blaze-white text-blaze-black"
+                    }`}
+                  >
+                    {pct}%
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {/* Deadline */}
+            <div className="space-y-2">
+              <p className="font-mono text-sm text-blaze-black/70">Deadline</p>
+              <div className="flex gap-2">
+                {[1, 5, 10, 30].map((min) => (
+                  <Button
+                    key={min}
+                    type="button"
+                    variant={deadline === min ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setDeadline(min)}
+                    className={`rounded-none border-2 border-blaze-black ${
+                      deadline === min
+                        ? "bg-blaze-orange text-blaze-black"
+                        : "bg-blaze-white text-blaze-black"
+                    }`}
+                  >
+                    {min}min
+                  </Button>
+                ))}
               </div>
             </div>
           </div>
@@ -321,6 +447,7 @@ export function TradePage() {
 
                 try {
                   if (isInQuestMode && activeQuest) {
+                    // Quest mode - use simulated trading
                     await simulateTransaction(
                       `Buying ${quantity} ${token.symbol}`
                     );
@@ -339,122 +466,196 @@ export function TradePage() {
                       `Added ${quantity} ${token.symbol} to Quest Portfolio`
                     );
                   } else {
-                    // Build payload using the token's address and decimals from Supabase
-                    // Convert human-readable quantity to smallest unit based on token decimals
-                    // Tokens created through this app use 0 decimals (optimized for cubic curve):
-                    // - With 0 decimals: 1 token = 1 smallest unit (whole numbers only!)
-                    // - With 8 decimals: 1 token = 100,000,000 smallest units (legacy/external tokens)
-                    // - Maximum safe amount with 0 decimals: ~10,000 tokens (10,000³ = 10^12)
-                    const amountInSmallestUnit = Math.round(
-                      quantity * Math.pow(10, token.decimals)
-                    );
+                    // Determine buy flow based on migration status
+                    if (token.migrationCompleted && token.hyperionPoolAddress) {
+                      // Token migrated to Hyperion DEX - use Hyperion swap
+                      const aptAmount = quantity * token.price; // Estimate APT needed
 
-                    console.log(`🛒 Buying ${quantity} ${token.symbol}:`, {
-                      tokenId: token.id,
-                      tokenAddress: token.address,
-                      decimals: token.decimals,
-                      humanReadable: quantity,
-                      smallestUnit: amountInSmallestUnit,
-                      calculation: `${quantity} * 10^${token.decimals} = ${amountInSmallestUnit}`,
-                    });
-
-                    const transactionPayload = createTransactionPayload(
-                      CONTRACT_FUNCTIONS.launchpad.buyToken,
-                      [],
-                      [token.address, amountInSmallestUnit]
-                    );
-
-                    console.log("📤 Transaction payload:", transactionPayload);
-
-                    const payload: InputTransactionData = {
-                      data: {
-                        function:
-                          transactionPayload.function as `${string}::${string}::${string}`,
-                        typeArguments: transactionPayload.typeArguments,
-                        functionArguments: transactionPayload.functionArguments,
-                      },
-                    };
-
-                    const toastId = toast.loading(
-                      `Buying ${quantity} ${token.symbol}...`,
-                      {
-                        description:
-                          "Please approve the transaction in your wallet.",
+                      // Validate APT amount - only block if token has no reserve balance
+                      if (
+                        aptAmount <= 0 &&
+                        (!token.reserveBalance || token.reserveBalance <= 0)
+                      ) {
+                        toast.error(
+                          `Cannot buy ${token.symbol} - token has no liquidity`,
+                          {
+                            description:
+                              "This token has no reserve balance. Please try a different token.",
+                          }
+                        );
+                        restoreCard(token.id);
+                        setPendingBuyToken(null);
+                        return;
                       }
-                    );
-                    const result = await signAndSubmitTransaction(payload);
-                    if (result && result.hash) {
-                      toast.success(
-                        `Successfully bought ${quantity} ${token.symbol}!`,
+
+                      // For tokens with $0 price but valid reserve, calculate proper APT amount
+                      let finalAptAmount = aptAmount;
+                      if (
+                        aptAmount <= 0 &&
+                        token.reserveBalance &&
+                        token.reserveBalance > 0
+                      ) {
+                        // For bonding curve tokens with $0 price, calculate APT needed
+                        // Use a more practical formula: quantity * 0.01 APT per token
+                        // This ensures reasonable token amounts for small purchases
+                        finalAptAmount = Math.max(0.001, quantity * 0.01);
+                      }
+
+                      // Calculate realistic minTokensOut based on actual APT amount
+                      // For tokens with $0 price, estimate tokens based on APT amount
+                      let estimatedTokens = quantity;
+                      if (
+                        aptAmount <= 0 &&
+                        token.reserveBalance &&
+                        token.reserveBalance > 0
+                      ) {
+                        // Estimate tokens based on APT amount and reserve balance
+                        // Simple estimation: APT amount * 1000 (adjust this multiplier as needed)
+                        estimatedTokens = finalAptAmount * 1000;
+                      }
+
+                      const minTokensOut = Math.floor(
+                        estimatedTokens *
+                          Math.pow(10, token.decimals || 8) *
+                          (1 - slippageTolerance / 100)
+                      );
+
+                      const payload = buildSwapAptForTokenPayload(
+                        token.hyperionPoolAddress,
+                        finalAptAmount,
+                        minTokensOut,
+                        deadline
+                      );
+
+                      const toastId = toast.loading(
+                        `Buying ${quantity} ${token.symbol} from Hyperion DEX...`,
                         {
-                          id: toastId,
-                          description: `Transaction: ${result.hash.slice(
-                            0,
-                            10
-                          )}...`,
+                          description:
+                            "Please approve the transaction in your wallet.",
                         }
                       );
-                      buyTokenStore(token, quantity);
-                    } else {
-                      toast.error(`Failed to buy ${token.symbol}`, {
-                        id: toastId,
+
+                      const result = await signAndSubmitTransaction({
+                        data: payload,
                       });
-                      toast.dismiss(toastId);
-                      restoreCard(token.id);
+
+                      if (result && result.hash) {
+                        toast.success(
+                          `Successfully bought ${quantity} ${token.symbol}!`,
+                          {
+                            id: toastId,
+                            description: `Transaction: ${result.hash.slice(
+                              0,
+                              10
+                            )}...`,
+                          }
+                        );
+                        buyTokenStore(token, quantity);
+                      }
+                    } else {
+                      // Token on bonding curve - use V2 buy function
+                      const aptAmount = quantity * token.price; // Estimate APT needed
+
+                      // Validate APT amount - only block if token has no reserve balance
+                      if (
+                        aptAmount <= 0 &&
+                        (!token.reserveBalance || token.reserveBalance <= 0)
+                      ) {
+                        toast.error(
+                          `Cannot buy ${token.symbol} - token has no liquidity`,
+                          {
+                            description:
+                              "This token has no reserve balance. Please try a different token.",
+                          }
+                        );
+                        restoreCard(token.id);
+                        setPendingBuyToken(null);
+                        return;
+                      }
+
+                      // For tokens with $0 price but valid reserve, calculate proper APT amount
+                      let finalAptAmount = aptAmount;
+                      if (
+                        aptAmount <= 0 &&
+                        token.reserveBalance &&
+                        token.reserveBalance > 0
+                      ) {
+                        // For bonding curve tokens with $0 price, calculate APT needed
+                        // Use a more practical formula: quantity * 0.01 APT per token
+                        // This ensures reasonable token amounts for small purchases
+                        finalAptAmount = Math.max(0.001, quantity * 0.01);
+                      }
+
+                      // Calculate realistic minTokensOut based on actual APT amount
+                      // For tokens with $0 price, estimate tokens based on APT amount
+                      let estimatedTokens = quantity;
+                      if (
+                        aptAmount <= 0 &&
+                        token.reserveBalance &&
+                        token.reserveBalance > 0
+                      ) {
+                        // Estimate tokens based on APT amount and reserve balance
+                        // Simple estimation: APT amount * 1000 (adjust this multiplier as needed)
+                        estimatedTokens = finalAptAmount * 1000;
+                      }
+
+                      const minTokensOut = Math.floor(
+                        estimatedTokens *
+                          Math.pow(10, token.decimals || 8) *
+                          (1 - slippageTolerance / 100)
+                      );
+
+                      const toastId = toast.loading(
+                        `Buying ${quantity} ${token.symbol} from bonding curve...`,
+                        {
+                          description:
+                            "Please approve the transaction in your wallet.",
+                        }
+                      );
+
+                      const result = await launchpadV2.buy(
+                        token.address,
+                        finalAptAmount,
+                        minTokensOut,
+                        deadline
+                      );
+
+                      if (result.success) {
+                        toast.success(
+                          `Successfully bought ${quantity} ${token.symbol}!`,
+                          {
+                            id: toastId,
+                            description: result.hash
+                              ? `Transaction: ${result.hash.slice(0, 10)}...`
+                              : undefined,
+                          }
+                        );
+                        buyTokenStore(token, quantity);
+                      } else {
+                        toast.error(`Failed to buy ${token.symbol}`, {
+                          id: toastId,
+                        });
+                        restoreCard(token.id);
+                      }
                     }
                   }
                 } catch (error: any) {
                   const isUserRejection =
                     error?.message?.includes("User rejected") ||
                     error?.message?.includes("rejected");
-                  const isAddressError =
-                    error?.message?.includes(
-                      "does not exist at this address"
-                    ) || error?.message?.includes("object does not exist");
-                  const isMintLimitError =
-                    error?.message?.includes("Mint limit reached") ||
-                    error?.message?.includes("mint limit");
-                  const isSupplyError =
-                    error?.message?.includes("Insufficient supply") ||
-                    error?.message?.includes("supply");
-                  const isOverflowError =
-                    error?.message?.includes("arithmetic") ||
-                    error?.message?.includes("overflow") ||
-                    error?.message?.toLowerCase().includes("generic error");
 
                   console.error("❌ Token purchase failed:", error);
-                  console.error("Error details:", {
-                    message: error?.message,
-                    code: error?.code,
-                    name: error?.name,
-                  });
-
-                  let errorTitle = `Failed to buy ${token.symbol}`;
-                  let errorDescription = error?.message || "Please try again.";
 
                   if (isUserRejection) {
-                    errorTitle = "Transaction rejected";
-                    errorDescription = "You cancelled the transaction.";
-                  } else if (isAddressError) {
-                    errorTitle = "Invalid token address";
-                    errorDescription = `The token ${token.symbol} doesn't exist on the blockchain. The token may not have been properly deployed.`;
-                  } else if (isMintLimitError) {
-                    errorTitle = "Mint limit reached";
-                    errorDescription = `You've reached the maximum amount of ${token.symbol} you can buy. The token has a per-address mint limit.`;
-                  } else if (isSupplyError) {
-                    errorTitle = "Insufficient token supply";
-                    errorDescription = `Not enough ${token.symbol} tokens available. Try buying a smaller amount.`;
-                  } else if (isOverflowError) {
-                    errorTitle = "Arithmetic Overflow (Bonding Curve Issue)";
-                    errorDescription = `This token was created with insufficient virtual liquidity, causing overflow in the bonding curve calculation. Token address: ${token.address.slice(
-                      0,
-                      10
-                    )}... - Please contact the token creator to redeploy with higher liquidity (10B+ APT).`;
+                    toast.error("Transaction rejected", {
+                      description: "You cancelled the transaction.",
+                    });
+                  } else {
+                    toast.error(`Failed to buy ${token.symbol}`, {
+                      description: error?.message || "Please try again.",
+                    });
                   }
 
-                  toast.error(errorTitle, {
-                    description: errorDescription,
-                  });
                   restoreCard(token.id);
                 } finally {
                   setPendingBuyToken(null);
@@ -488,43 +689,78 @@ export function TradePage() {
       <div className="w-full max-w-md h-[60vh] max-h-[600px] relative mt-8 shadow-blaze-shadow">
         {renderContent()}
       </div>
-      <div className="flex items-center justify-center gap-4 mt-8">
-        <Button
-          onClick={() => swipe("left")}
-          disabled={
-            tokens.length === 0 ||
-            blockchainLoading ||
-            supabaseLoading ||
-            !isConnected
-          }
-          className="h-20 w-20 rounded-full border-2 border-blaze-black bg-blaze-white text-blaze-black hover:bg-blaze-black/10 active:bg-blaze-black/20 disabled:opacity-50"
-        >
-          <X className="w-12 h-12" />
-        </Button>
-        <Button
-          onClick={() => swipe("up")}
-          disabled={
-            tokens.length === 0 ||
-            blockchainLoading ||
-            supabaseLoading ||
-            !isConnected
-          }
-          className="h-20 w-20 rounded-full border-2 border-blaze-black bg-blaze-white text-blaze-black hover:bg-blaze-black/10 active:bg-blaze-black/20 disabled:opacity-50"
-        >
-          <ArrowUp className="w-12 h-12" />
-        </Button>
-        <Button
-          onClick={() => swipe("right")}
-          disabled={
-            tokens.length === 0 ||
-            blockchainLoading ||
-            supabaseLoading ||
-            !isConnected
-          }
-          className="h-20 w-20 rounded-full border-2 border-blaze-orange bg-blaze-orange text-blaze-black hover:bg-blaze-orange/80 active:bg-blaze-orange/90 disabled:opacity-50"
-        >
-          <Heart className="w-12 h-12" />
-        </Button>
+      <div className="flex flex-col items-center justify-center gap-4 mt-8">
+        {/* Main action buttons */}
+        <div className="flex items-center justify-center gap-4">
+          <Button
+            onClick={() => swipe("left")}
+            disabled={
+              tokens.length === 0 ||
+              blockchainLoading ||
+              supabaseLoading ||
+              !isConnected
+            }
+            className="h-20 w-20 rounded-full border-2 border-blaze-black bg-blaze-white text-blaze-black hover:bg-blaze-black/10 active:bg-blaze-black/20 disabled:opacity-50"
+          >
+            <X className="w-12 h-12" />
+          </Button>
+          <Button
+            onClick={() => {
+              // Show info for current token
+              const currentToken = tokens[tokens.length - 1];
+              if (currentToken) {
+                setInfoToken(currentToken);
+                setShowInfoModal(true);
+              }
+            }}
+            disabled={
+              tokens.length === 0 || blockchainLoading || supabaseLoading
+            }
+            className="h-20 w-20 rounded-full border-2 border-blaze-black bg-blaze-white text-blaze-black hover:bg-blaze-black/10 active:bg-blaze-black/20 disabled:opacity-50"
+          >
+            <Info className="w-12 h-12" />
+          </Button>
+          <Button
+            onClick={() => swipe("up")}
+            disabled={
+              tokens.length === 0 ||
+              blockchainLoading ||
+              supabaseLoading ||
+              !isConnected
+            }
+            className="h-20 w-20 rounded-full border-2 border-blaze-black bg-blaze-white text-blaze-black hover:bg-blaze-black/10 active:bg-blaze-black/20 disabled:opacity-50"
+          >
+            <ArrowUp className="w-12 h-12" />
+          </Button>
+          <Button
+            onClick={() => swipe("right")}
+            disabled={
+              tokens.length === 0 ||
+              blockchainLoading ||
+              supabaseLoading ||
+              !isConnected
+            }
+            className="h-20 w-20 rounded-full border-2 border-blaze-orange bg-blaze-orange text-blaze-black hover:bg-blaze-orange/80 active:bg-blaze-orange/90 disabled:opacity-50"
+          >
+            <Heart className="w-12 h-12" />
+          </Button>
+        </div>
+
+        {/* Button labels */}
+        <div className="flex items-center justify-center gap-4 w-full max-w-md">
+          <p className="flex-1 text-center font-mono text-xs text-blaze-black/70">
+            SKIP
+          </p>
+          <p className="flex-1 text-center font-mono text-xs text-blaze-black/70">
+            INFO
+          </p>
+          <p className="flex-1 text-center font-mono text-xs text-blaze-black/70">
+            WATCHLIST
+          </p>
+          <p className="flex-1 text-center font-mono text-xs text-blaze-black/70">
+            BUY
+          </p>
+        </div>
       </div>
     </div>
   );

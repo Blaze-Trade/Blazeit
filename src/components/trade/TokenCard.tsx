@@ -1,10 +1,15 @@
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import type { Token } from "@shared/types";
 import { motion } from "framer-motion";
 import { TrendingDown, TrendingUp } from "lucide-react";
 import Image from "next/image";
+import { useMemo } from "react";
+
 interface TokenCardProps {
   token: Token;
 }
+
 const formatCurrency = (value: number) => {
   if (value >= 1_000_000_000) {
     return `$${(value / 1_000_000_000).toFixed(2)}B`;
@@ -17,8 +22,19 @@ const formatCurrency = (value: number) => {
   }
   return `$${value.toFixed(2)}`;
 };
+
 export function TokenCard({ token }: TokenCardProps) {
   const isPositiveChange = token.change24h >= 0;
+
+  // Calculate bonding curve progress
+  const bondingCurveProgress = useMemo(() => {
+    if (!token.marketCap || !token.marketCapThresholdUsd) {
+      return 0;
+    }
+    const progressPercent =
+      (token.marketCap / token.marketCapThresholdUsd) * 100;
+    return Math.min(progressPercent, 100);
+  }, [token.marketCap, token.marketCapThresholdUsd]);
   return (
     <motion.div
       className="absolute w-full h-full bg-blaze-white border-2 border-blaze-black p-6 flex flex-col justify-between overflow-hidden cursor-grab active:cursor-grabbing"
@@ -26,6 +42,19 @@ export function TokenCard({ token }: TokenCardProps) {
       dragConstraints={{ left: 0, right: 0 }}
       dragElastic={1}
     >
+      {/* Migration Status Badge */}
+      <div className="absolute top-4 right-4">
+        <Badge
+          className={`rounded-none border-2 font-mono text-xs ${
+            token.migrationCompleted
+              ? "bg-green-500 border-green-700 text-white"
+              : "bg-blaze-orange border-blaze-black text-blaze-black"
+          }`}
+        >
+          {token.migrationCompleted ? "On DEX" : "On Curve"}
+        </Badge>
+      </div>
+
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-4">
           {token.logoUrl && (
@@ -74,6 +103,24 @@ export function TokenCard({ token }: TokenCardProps) {
           })}
         </h3>
       </div>
+      {/* Bonding Curve Progress (if not migrated) */}
+      {!token.migrationCompleted && token.bondingCurveActive && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="font-mono text-sm text-blaze-black/70">
+              Bonding Curve
+            </p>
+            <p className="font-mono text-sm font-bold text-blaze-orange">
+              {bondingCurveProgress.toFixed(1)}%
+            </p>
+          </div>
+          <Progress
+            value={bondingCurveProgress}
+            className="h-2 rounded-none border border-blaze-black"
+          />
+        </div>
+      )}
+
       <div className="flex justify-between items-end">
         <div>
           <p className="font-mono text-lg text-blaze-black/70">Market Cap</p>
