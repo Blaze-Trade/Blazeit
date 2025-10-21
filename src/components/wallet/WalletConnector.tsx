@@ -83,12 +83,15 @@ export function WalletConnector() {
 
   const handleDisconnect = async () => {
     try {
+      console.log("🔄 Attempting to disconnect wallet...");
       await disconnect();
+      console.log("✅ Wallet disconnected successfully");
+      setDisconnected(); // Update portfolio store
       setLastConnectedWallet(null);
       localStorage.removeItem("lastConnectedWallet");
       toast.success("Wallet disconnected successfully");
     } catch (error) {
-      console.error("Failed to disconnect wallet:", error);
+      console.error("❌ Failed to disconnect wallet:", error);
       toast.error("Failed to disconnect wallet");
     }
   };
