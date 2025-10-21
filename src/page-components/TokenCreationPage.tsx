@@ -22,45 +22,48 @@ export function TokenCreationPage() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
 
-  // Form state - optimized for smart contract's hardcoded cubic bonding curve
-  // IMPORTANT: Contract uses cubic formula (amount³) which overflows with large amounts
-  // Solution: Use ZERO DECIMALS - tokens are whole numbers only
+  // V2 Form state - Bancor bonding curve with automatic DEX migration
   const [formData, setFormData] = useState({
+    // Basic Info
     symbol: "",
     name: "",
     description: "",
     image: null as File | null,
     imageUrl: null as string | null,
-    decimals: 0, // Token decimals (0-8). 0 = whole numbers (recommended for cubic curve)
-    maxSupply: 1000000, // 1 million tokens (0 decimals = whole numbers only)
-    projectURL: "",
-    targetSupply: 100000, // 100K tokens (cubic curve will reach this slowly)
-    virtualLiquidity: 1000000, // 1M APT (enough liquidity for reasonable prices)
-    curveExponent: 2, // Stored but not used (contract hardcodes cubic regardless)
-    maxMintPerAccount: 0, // NO LIMIT (0 = unlimited)
+
+    // Token Settings
+    decimals: 8, // Token decimals (0-8), default 8
+    maxSupply: undefined as number | undefined, // Optional max supply (undefined = unlimited)
+
+    // V2 Bonding Curve Parameters
+    reserveRatio: 50, // Bancor reserve ratio (1-100%), default 50%
+    initialReserveApt: 0.1, // Initial APT to bootstrap curve, default 0.1 APT
+    marketCapThreshold: 75000, // Market cap threshold for DEX migration (USD), default $75k
+
+    // Social Links
+    website: "",
+    twitter: "",
+    telegram: "",
+    discord: "",
   });
 
   // Character limits
-  const symbolMaxLength = 6;
+  const symbolMaxLength = 10; // V2 allows up to 10 chars
   const descriptionMaxLength = 500;
 
-  // Removed quality calculation and gating
-
-  // Creation fee in APT (example value)
-  const creationFee = 0.0000000000000001;
-
-  const handleInputChange = (field: string, value: string) => {
+  const handleInputChange = (field: string, value: string | number) => {
     setFormData((prev) => {
       // Handle numeric fields
       const numericFields = [
+        "decimals",
         "maxSupply",
-        "targetSupply",
-        "virtualLiquidity",
-        "curveExponent",
-        "maxMintPerAccount",
+        "reserveRatio",
+        "initialReserveApt",
+        "marketCapThreshold",
       ];
       if (numericFields.includes(field)) {
-        return { ...prev, [field]: parseFloat(value) || 0 };
+        const numValue = typeof value === "string" ? parseFloat(value) : value;
+        return { ...prev, [field]: numValue || 0 };
       }
       return { ...prev, [field]: value };
     });
@@ -176,13 +179,19 @@ export function TokenCreationPage() {
       description: formData.description,
       image: formData.image || undefined,
       imageUrl: formData.imageUrl || undefined,
-      decimals: formData.decimals, // Pass user-specified decimals
+      decimals: formData.decimals,
       maxSupply: formData.maxSupply,
-      projectURL: formData.projectURL,
-      targetSupply: formData.targetSupply,
-      virtualLiquidity: formData.virtualLiquidity,
-      curveExponent: formData.curveExponent,
-      maxMintPerAccount: formData.maxMintPerAccount,
+
+      // V2 Bonding Curve Parameters
+      reserveRatio: formData.reserveRatio,
+      initialReserveApt: formData.initialReserveApt,
+      marketCapThreshold: formData.marketCapThreshold,
+
+      // Social Links
+      website: formData.website,
+      twitter: formData.twitter,
+      telegram: formData.telegram,
+      discord: formData.discord,
     });
 
     if (result.success) {
@@ -190,8 +199,15 @@ export function TokenCreationPage() {
     }
   };
 
-  const getShortAddress = (address: string) =>
-    `${address.slice(0, 6)}...${address.slice(-4)}`;
+  const formatCurrency = (value: number) => {
+    if (value >= 1_000_000) {
+      return `$${(value / 1_000_000).toFixed(2)}M`;
+    }
+    if (value >= 1_000) {
+      return `$${(value / 1_000).toFixed(2)}K`;
+    }
+    return `$${value.toFixed(2)}`;
+  };
 
   return (
     <div className="min-h-screen bg-blaze-white p-4 md:p-8">
@@ -284,26 +300,171 @@ export function TokenCreationPage() {
               </div>
             </div>
 
-            {/* Project URL */}
-            <div className="space-y-2">
-              <Label
-                htmlFor="projectURL"
-                className="text-lg font-bold text-blaze-black"
-              >
-                Project URL{" "}
+            {/* Social Links Section */}
+            <div className="space-y-4 pt-4 border-t-2 border-blaze-black/10">
+              <h3 className="font-mono font-bold text-lg text-blaze-black">
+                Social Links{" "}
                 <span className="text-sm text-blaze-black/50 font-normal">
                   (Optional)
                 </span>
-              </Label>
-              <Input
-                id="projectURL"
-                value={formData.projectURL}
-                onChange={(e) =>
-                  handleInputChange("projectURL", e.target.value)
-                }
-                placeholder="https://yourproject.com"
-                className="rounded-none border-2 border-blaze-black bg-blaze-white text-blaze-black text-lg"
-              />
+              </h3>
+
+              <div className="space-y-2">
+                <Label
+                  htmlFor="website"
+                  className="text-sm font-bold text-blaze-black"
+                >
+                  Website
+                </Label>
+                <Input
+                  id="website"
+                  value={formData.website}
+                  onChange={(e) => handleInputChange("website", e.target.value)}
+                  placeholder="https://yourproject.com"
+                  className="rounded-none border-2 border-blaze-black bg-blaze-white text-blaze-black"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label
+                  htmlFor="twitter"
+                  className="text-sm font-bold text-blaze-black"
+                >
+                  Twitter
+                </Label>
+                <Input
+                  id="twitter"
+                  value={formData.twitter}
+                  onChange={(e) => handleInputChange("twitter", e.target.value)}
+                  placeholder="@yourtoken"
+                  className="rounded-none border-2 border-blaze-black bg-blaze-white text-blaze-black"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label
+                  htmlFor="telegram"
+                  className="text-sm font-bold text-blaze-black"
+                >
+                  Telegram
+                </Label>
+                <Input
+                  id="telegram"
+                  value={formData.telegram}
+                  onChange={(e) =>
+                    handleInputChange("telegram", e.target.value)
+                  }
+                  placeholder="t.me/yourtoken"
+                  className="rounded-none border-2 border-blaze-black bg-blaze-white text-blaze-black"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label
+                  htmlFor="discord"
+                  className="text-sm font-bold text-blaze-black"
+                >
+                  Discord
+                </Label>
+                <Input
+                  id="discord"
+                  value={formData.discord}
+                  onChange={(e) => handleInputChange("discord", e.target.value)}
+                  placeholder="discord.gg/yourtoken"
+                  className="rounded-none border-2 border-blaze-black bg-blaze-white text-blaze-black"
+                />
+              </div>
+            </div>
+
+            {/* Bonding Curve Settings */}
+            <div className="space-y-4 pt-4 border-t-2 border-blaze-black/10">
+              <h3 className="font-mono font-bold text-lg text-blaze-black">
+                Bonding Curve Settings
+              </h3>
+
+              {/* Reserve Ratio */}
+              <div className="space-y-2">
+                <Label
+                  htmlFor="reserveRatio"
+                  className="text-sm font-bold text-blaze-black"
+                >
+                  Reserve Ratio
+                </Label>
+                <div className="flex items-center gap-4">
+                  <input
+                    type="range"
+                    id="reserveRatio"
+                    min="1"
+                    max="100"
+                    value={formData.reserveRatio}
+                    onChange={(e) =>
+                      handleInputChange(
+                        "reserveRatio",
+                        parseInt(e.target.value)
+                      )
+                    }
+                    className="flex-1 h-2 bg-blaze-orange/20 rounded-none border-2 border-blaze-black appearance-none cursor-pointer"
+                  />
+                  <span className="font-mono font-bold text-xl text-blaze-black w-16 text-right">
+                    {formData.reserveRatio}%
+                  </span>
+                </div>
+                <p className="text-xs text-blaze-black/50 font-mono">
+                  Higher ratio = more stable price. 50% recommended for balanced
+                  growth.
+                </p>
+              </div>
+
+              {/* Initial Reserve */}
+              <div className="space-y-2">
+                <Label
+                  htmlFor="initialReserveApt"
+                  className="text-sm font-bold text-blaze-black"
+                >
+                  Initial Reserve (APT)
+                </Label>
+                <Input
+                  id="initialReserveApt"
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  value={formData.initialReserveApt}
+                  onChange={(e) =>
+                    handleInputChange("initialReserveApt", e.target.value)
+                  }
+                  placeholder="0.1"
+                  className="rounded-none border-2 border-blaze-black bg-blaze-white text-blaze-black text-lg"
+                />
+                <p className="text-xs text-blaze-black/50 font-mono">
+                  APT you deposit to bootstrap the bonding curve. Min 0.01 APT.
+                </p>
+              </div>
+
+              {/* Market Cap Threshold */}
+              <div className="space-y-2">
+                <Label
+                  htmlFor="marketCapThreshold"
+                  className="text-sm font-bold text-blaze-black"
+                >
+                  DEX Migration Threshold (USD)
+                </Label>
+                <Input
+                  id="marketCapThreshold"
+                  type="number"
+                  step="1000"
+                  min="1000"
+                  value={formData.marketCapThreshold}
+                  onChange={(e) =>
+                    handleInputChange("marketCapThreshold", e.target.value)
+                  }
+                  placeholder="75000"
+                  className="rounded-none border-2 border-blaze-black bg-blaze-white text-blaze-black text-lg"
+                />
+                <p className="text-xs text-blaze-black/50 font-mono">
+                  When market cap reaches this value, token automatically
+                  migrates to Hyperion DEX. Default: $75,000
+                </p>
+              </div>
             </div>
 
             {/* Advanced Options Toggle */}
@@ -314,32 +475,24 @@ export function TokenCreationPage() {
                 onClick={() => setShowAdvanced(!showAdvanced)}
                 className="w-full rounded-none border-2 border-blaze-black/20 bg-blaze-white text-blaze-black hover:bg-blaze-black/5"
               >
-                {showAdvanced ? "Hide" : "Show"} Advanced Options
+                {showAdvanced ? "Hide" : "Show"} Advanced Token Settings
               </Button>
-              {!showAdvanced && (
-                <p className="text-sm text-blaze-black/50 mt-2 font-mono text-center">
-                  Using smart defaults: {formData.decimals} decimals, 1M max
-                  supply, 100K target, 1M APT liquidity
-                  {formData.decimals === 0 && " (safest - whole numbers only)"}
-                  {formData.decimals > 2 && " ⚠️ High overflow risk!"}
-                </p>
-              )}
             </div>
 
-            {/* Advanced Options - Collapsible */}
+            {/* Advanced Token Settings - Collapsible */}
             {showAdvanced && (
-              <div className="space-y-6 pt-4 border-t-2 border-blaze-black/10">
+              <div className="space-y-6 pt-4">
                 <p className="text-sm text-blaze-black/70 font-mono">
-                  ⚠️ Advanced options - customize with caution
+                  Advanced token settings
                 </p>
 
                 {/* Decimals */}
                 <div className="space-y-2">
                   <Label
                     htmlFor="decimals"
-                    className="text-lg font-bold text-blaze-black"
+                    className="text-sm font-bold text-blaze-black"
                   >
-                    Token Decimals ⚠️
+                    Token Decimals
                   </Label>
                   <Input
                     id="decimals"
@@ -348,167 +501,59 @@ export function TokenCreationPage() {
                     onChange={(e) =>
                       handleInputChange("decimals", e.target.value)
                     }
-                    placeholder="0"
+                    placeholder="8"
                     min="0"
                     max="8"
                     className="rounded-none border-2 border-blaze-black bg-blaze-white text-blaze-black text-lg"
                   />
                   <p className="text-xs text-blaze-black/50 font-mono">
-                    0-8. CRITICAL: 0 = whole numbers (safest, ~10K max buy). 2 =
-                    two decimals (~100 max buy). 4+ = high overflow risk! Higher
-                    decimals = exponentially smaller safe buy amounts due to
-                    cubic curve.
+                    0-8. Default is 8 (standard for Aptos FA). 0 = whole numbers
+                    only.
                   </p>
-                  {formData.decimals > 2 && (
-                    <div className="bg-red-500/10 border-2 border-red-500 p-3 rounded-none">
-                      <p className="text-sm font-bold text-red-600 font-mono">
-                        ⚠️ WARNING: {formData.decimals} decimals will likely
-                        cause overflow!
-                      </p>
-                      <p className="text-xs text-red-600 font-mono mt-1">
-                        Safe max buy ≈{" "}
-                        {Math.floor(
-                          10000 / Math.pow(10, formData.decimals - 0)
-                        )}{" "}
-                        tokens
-                      </p>
-                    </div>
-                  )}
                 </div>
 
                 {/* Max Supply */}
                 <div className="space-y-2">
                   <Label
                     htmlFor="maxSupply"
-                    className="text-lg font-bold text-blaze-black"
+                    className="text-sm font-bold text-blaze-black"
                   >
-                    Max Supply
+                    Max Supply{" "}
+                    <span className="text-xs text-blaze-black/50 font-normal">
+                      (Optional)
+                    </span>
                   </Label>
                   <Input
                     id="maxSupply"
                     type="number"
-                    value={formData.maxSupply}
+                    value={formData.maxSupply || ""}
                     onChange={(e) =>
                       handleInputChange("maxSupply", e.target.value)
                     }
-                    placeholder="1000000"
+                    placeholder="Leave empty for unlimited"
                     className="rounded-none border-2 border-blaze-black bg-blaze-white text-blaze-black text-lg"
                   />
                   <p className="text-xs text-blaze-black/50 font-mono">
-                    Human-readable. 1000000 = 1 million tokens. With 0 decimals,
-                    tokens are whole numbers only. Max safe buy: ~10K tokens at
-                    once.
-                  </p>
-                </div>
-
-                {/* Target Supply */}
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="targetSupply"
-                    className="text-lg font-bold text-blaze-black"
-                  >
-                    Target Supply
-                  </Label>
-                  <Input
-                    id="targetSupply"
-                    type="number"
-                    value={formData.targetSupply}
-                    onChange={(e) =>
-                      handleInputChange("targetSupply", e.target.value)
-                    }
-                    placeholder="100000"
-                    className="rounded-none border-2 border-blaze-black bg-blaze-white text-blaze-black text-lg"
-                  />
-                  <p className="text-xs text-blaze-black/50 font-mono">
-                    Human-readable. 100000 = 100K tokens. Bonding curve
-                    deactivates when this supply is reached.
-                  </p>
-                </div>
-
-                {/* Virtual Liquidity */}
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="virtualLiquidity"
-                    className="text-lg font-bold text-blaze-black"
-                  >
-                    Virtual Liquidity (in APT)
-                  </Label>
-                  <Input
-                    id="virtualLiquidity"
-                    type="number"
-                    value={formData.virtualLiquidity}
-                    onChange={(e) =>
-                      handleInputChange("virtualLiquidity", e.target.value)
-                    }
-                    placeholder="1000000"
-                    className="rounded-none border-2 border-blaze-black bg-blaze-white text-blaze-black text-lg"
-                  />
-                  <p className="text-xs text-blaze-black/50 font-mono">
-                    In APT. 1000000 = 1M APT. Controls token pricing - higher
-                    liquidity = lower prices. Works with 2 decimal tokens.
-                  </p>
-                </div>
-
-                {/* Curve Exponent */}
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="curveExponent"
-                    className="text-lg font-bold text-blaze-black"
-                  >
-                    Curve Exponent
-                  </Label>
-                  <Input
-                    id="curveExponent"
-                    type="number"
-                    value={formData.curveExponent}
-                    onChange={(e) =>
-                      handleInputChange("curveExponent", e.target.value)
-                    }
-                    placeholder="1"
-                    className="rounded-none border-2 border-blaze-black bg-blaze-white text-blaze-black text-lg"
-                  />
-                  <p className="text-xs text-blaze-black/50 font-mono">
-                    Stored but NOT USED. Contract hardcodes cubic formula
-                    (amount³). This parameter doesn&apos;t affect pricing.
-                  </p>
-                </div>
-
-                {/* Max Mint Per Account */}
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="maxMintPerAccount"
-                    className="text-lg font-bold text-blaze-black"
-                  >
-                    Max Mint Per Account
-                  </Label>
-                  <Input
-                    id="maxMintPerAccount"
-                    type="number"
-                    value={formData.maxMintPerAccount}
-                    onChange={(e) =>
-                      handleInputChange("maxMintPerAccount", e.target.value)
-                    }
-                    placeholder="0"
-                    className="rounded-none border-2 border-blaze-black bg-blaze-white text-blaze-black text-lg"
-                  />
-                  <p className="text-xs text-blaze-black/50 font-mono">
-                    <strong>0 = NO LIMIT</strong> (recommended). Set a number to
-                    limit per wallet.
+                    Maximum total supply. Leave empty for unlimited supply.
                   </p>
                 </div>
               </div>
             )}
 
-            {/* Quality section removed */}
-
-            {/* Creation Fee */}
-            <div className="space-y-2">
+            {/* Initial Reserve Summary */}
+            <div className="space-y-2 pt-4 border-t-2 border-blaze-black/10">
               <Label className="text-lg font-bold text-blaze-black">
-                Creation Fee (APT)
+                You Will Pay
               </Label>
               <div className="p-4 rounded-none border-2 border-blaze-black bg-blaze-orange/20 text-blaze-black font-mono text-lg">
-                $ {creationFee.toFixed(16)}
+                {formData.initialReserveApt.toFixed(2)} APT
               </div>
+              <p className="text-xs text-blaze-black/50 font-mono">
+                This APT bootstraps your token&apos;s bonding curve. When the
+                token reaches ${formatCurrency(formData.marketCapThreshold)}{" "}
+                market cap, all collected funds migrate to Hyperion DEX as
+                liquidity.
+              </p>
             </div>
 
             {/* Token Image Upload */}
@@ -598,28 +643,6 @@ export function TokenCreationPage() {
                     )}
                   </div>
                 )}
-              </div>
-            </div>
-
-            {/* Connected Wallet Info */}
-            {connected && account && (
-              <div className="space-y-2">
-                <Label className="text-lg font-bold text-blaze-black">
-                  Connected Wallet:
-                </Label>
-                <div className="p-4 rounded-none border-2 border-blaze-black bg-blaze-white text-blaze-black font-mono text-lg">
-                  {getShortAddress(account.address.toString())}
-                </div>
-              </div>
-            )}
-
-            {/* Creation Fee Summary */}
-            <div className="space-y-2">
-              <Label className="text-lg font-bold text-blaze-black">
-                Creation Fee:
-              </Label>
-              <div className="p-4 rounded-none border-2 border-blaze-black bg-blaze-white text-blaze-black font-mono text-lg">
-                {creationFee.toFixed(16)} APT
               </div>
             </div>
 

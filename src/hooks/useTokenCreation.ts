@@ -1,12 +1,11 @@
+import type { CreatePoolParams } from "@/lib/blaze-sdk";
+import { getAptosNetwork } from "@/lib/constants";
 import { imageUploadService } from "@/lib/image-upload";
 import { tokenCreationApi } from "@/lib/supabase-api";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import {
-  useLaunchpadIntegration,
-  type CreateTokenArguments,
-} from "./useLaunchpadIntegration";
+import { useLaunchpadV2 } from "./useLaunchpadV2";
 
 interface TokenCreationData {
   symbol: string;
@@ -14,13 +13,21 @@ interface TokenCreationData {
   description: string;
   image?: File;
   imageUrl?: string;
-  maxSupply?: number; // In human-readable units. Default: 1,000,000 (1M tokens)
-  projectURL?: string;
-  targetSupply?: number; // In human-readable units. Default: 100,000 (100K tokens)
-  virtualLiquidity?: number; // In APT. Default: 1,000,000 APT
-  curveExponent?: number; // Curve steepness, 2 = quadratic (default: 2)
-  maxMintPerAccount?: number; // In human-readable units. 0 = NO LIMIT (default: 0)
-  decimals?: number; // Token decimals (0-8). Default: 0 (recommended for cubic curve). Higher = overflow risk!
+
+  // Token Settings
+  decimals?: number; // Default: 8
+  maxSupply?: number; // Optional, undefined = unlimited
+
+  // V2 Bonding Curve Parameters
+  reserveRatio?: number; // 1-100%, default: 50%
+  initialReserveApt?: number; // APT amount, default: 0.1
+  marketCapThreshold?: number; // USD, default: 75000
+
+  // Social Links
+  website?: string;
+  twitter?: string;
+  telegram?: string;
+  discord?: string;
 }
 
 interface TokenCreationResult {
@@ -33,15 +40,14 @@ let aptosSingleton: any | null = null;
 async function getAptosClient() {
   if (aptosSingleton) return aptosSingleton;
   const mod = await import("@aptos-labs/ts-sdk");
-  const config = new mod.AptosConfig({ network: mod.Network.DEVNET });
+  const config = new mod.AptosConfig({ network: getAptosNetwork() });
   aptosSingleton = new mod.Aptos(config);
   return aptosSingleton;
 }
 
 export function useTokenCreation() {
   const { account } = useWallet();
-  const launchpadIntegration = useLaunchpadIntegration();
-  const { executeCreateToken } = launchpadIntegration;
+  const { createPool } = useLaunchpadV2();
   const [isCreating, setIsCreating] = useState(false);
 
   const createToken = async (
@@ -52,72 +58,45 @@ export function useTokenCreation() {
       return { success: false, error: "No wallet connected" };
     }
 
-    if (!executeCreateToken) {
-      console.error("Contract create token function is not available");
-      toast.error(
-        "Contract function not available. Please check wallet connection."
-      );
-      return { success: false, error: "Contract function not available" };
-    }
-
     setIsCreating(true);
 
     try {
-      // Prepare the arguments in the format expected by the contract
-      // SMART CONTRACT COMPATIBLE TOKEN CREATION
-      // The contract uses a HARDCODED CUBIC bonding curve: cost = (supply³ - prev³) / (3 × virtualLiquidity)
-      // This means amount³ is calculated BEFORE division, causing u64 overflow with large amounts.
-      //
-      // SOLUTION: Use ZERO DECIMALS to keep amounts as small as possible
-      // With 0 decimals:
-      // - 1 token = 1 smallest unit (no conversion!)
-      // - Buying 1000 tokens = 1,000 smallest units
-      // - 1,000³ = 10^9 (safely within u64 max of ~10^19) ✅
-      //
-      // Math example for buying 100 tokens (100 smallest units):
-      // - new_supply³ = 100³ = 1,000,000 = 10^6
-      // - virtualLiquidity in smallest units = 1M APT × 10^8 = 10^14
-      // - cost = 10^6 / (3 × 10^14) = tiny amount ✅
-      //
-      // Maximum safe amount: ~10,000 tokens at once (10,000³ = 10^12)
-      const decimals =
-        tokenData.decimals !== undefined ? tokenData.decimals : 0;
-
-      // Warn if using high decimals (overflow risk)
-      if (decimals > 2) {
-        console.warn(
-          `⚠️ Using ${decimals} decimals may cause overflow! With cubic bonding curve:`
-        );
-        console.warn(`- Safe max buy with 0 decimals: ~10,000 tokens`);
-        console.warn(`- Safe max buy with 2 decimals: ~100 tokens`);
-        console.warn(`- Safe max buy with 4 decimals: ~1 token`);
-        console.warn(`- With ${decimals} decimals: overflow very likely!`);
-      }
-
-      const createTokenArgs: CreateTokenArguments = {
-        maxSupply: tokenData.maxSupply || 1000000, // 1M tokens (human-readable)
+      // Prepare V2 pool creation parameters
+      const poolParams: CreatePoolParams = {
         name: tokenData.name,
-        symbol: tokenData.symbol,
-        decimal: decimals, // User-specified decimals (0-8). Lower = safer for cubic curve!
-        iconURL: tokenData.imageUrl || "",
-        projectURL: tokenData.projectURL || "",
-        targetSupply: tokenData.targetSupply || 100000, // 100K tokens (human-readable)
-        virtualLiquidity: tokenData.virtualLiquidity || 1000000, // 1M APT virtual liquidity
-        curveExponent: tokenData.curveExponent || 2, // Stored but not used (contract hardcodes cubic)
-        maxMintPerAccount: tokenData.maxMintPerAccount || 0, // 0 = NO LIMIT
+        ticker: tokenData.symbol,
+        imageUri: tokenData.imageUrl || "",
+        description: tokenData.description,
+        website: tokenData.website,
+        twitter: tokenData.twitter,
+        telegram: tokenData.telegram,
+        discord: tokenData.discord,
+        maxSupply: tokenData.maxSupply
+          ? BigInt(tokenData.maxSupply)
+          : undefined,
+        decimals: tokenData.decimals ?? 8,
+        reserveRatio: tokenData.reserveRatio ?? 50,
+        initialReserveApt: tokenData.initialReserveApt ?? 0.1,
+        thresholdUsd: tokenData.marketCapThreshold ?? 75000,
       };
 
       console.log(
-        "🚀 Creating token with args:",
-        JSON.stringify(createTokenArgs, null, 2)
+        "🚀 Creating V2 pool with params:",
+        JSON.stringify(
+          poolParams,
+          (key, value) =>
+            typeof value === "bigint" ? value.toString() : value,
+          2
+        )
       );
-      const result = await executeCreateToken(createTokenArgs);
-      console.log("✅ Token creation result:", result);
+
+      const result = await createPool(poolParams);
+      console.log("✅ Pool creation result:", result);
 
       // If blockchain creation was successful, store the token in the database
       if (result.success && result.hash) {
         try {
-          // Extract token address from the transaction result
+          // Extract pool ID (FA metadata object address) from transaction
           const client = await getAptosClient();
           const txn = await client.waitForTransaction({
             transactionHash: result.hash,
@@ -125,84 +104,85 @@ export function useTokenCreation() {
 
           console.log("Transaction details:", JSON.stringify(txn, null, 2));
 
-          // Extract the actual FA metadata object address from transaction
-          let tokenAddress = null;
+          let poolId: string | null = null;
 
-          // Method 1: Check events for FA creation
+          // Check events for CreatePoolEvent
           if ("events" in txn && Array.isArray(txn.events)) {
-            console.log("Checking events:", txn.events);
-
-            // Look for fungible asset events
             for (const event of txn.events) {
-              console.log("Event type:", event.type);
-              console.log("Event data:", event.data);
+              // Look for CreatePoolEvent which contains pool_id
+              if (event.type?.includes("CreatePoolEvent")) {
+                poolId = event.data?.pool_id?.inner || event.data?.pool_id;
+                console.log("Found pool ID in CreatePoolEvent:", poolId);
+                break;
+              }
 
-              // Check for FA metadata creation or token creation events
+              // Fallback: Check for FA metadata creation
               if (
                 event.type?.includes("0x1::object::ObjectCore") ||
-                event.type?.includes("CreateEvent") ||
                 event.type?.includes("fungible_asset")
               ) {
-                // The FA metadata object address might be in event data
                 if (event.data?.object || event.data?.metadata) {
-                  tokenAddress = event.data.object || event.data.metadata;
-                  console.log("Found token address in event:", tokenAddress);
+                  poolId = event.data.object || event.data.metadata;
+                  console.log("Found pool ID in FA event:", poolId);
                   break;
                 }
               }
             }
           }
 
-          // Method 2: Check write set changes for new objects created
-          if (!tokenAddress && "changes" in txn && Array.isArray(txn.changes)) {
-            console.log("Checking changes:", txn.changes);
-
-            // Look for write_resource changes that create new objects
+          // Fallback: Check write set changes
+          if (!poolId && "changes" in txn && Array.isArray(txn.changes)) {
             for (const change of txn.changes) {
               if (
                 change.type === "write_resource" &&
                 change.data?.type?.includes("0x1::fungible_asset::Metadata")
               ) {
-                tokenAddress = change.address;
-                console.log("Found token address in changes:", tokenAddress);
+                poolId = change.address;
+                console.log("Found pool ID in changes:", poolId);
                 break;
               }
             }
           }
 
-          // Method 3: Fallback - derive object address from transaction
-          // For FA tokens, the metadata object is typically created at a deterministic address
-          if (!tokenAddress) {
-            console.warn(
-              "Could not find FA metadata address in transaction, using fallback"
-            );
-            // You may need to call a view function to get the FA metadata address
-            // For now, we'll need to handle this case
+          if (!poolId) {
+            console.warn("Could not extract pool ID from transaction");
             toast.warning(
-              "Could not automatically extract token address. Please update it manually from the explorer."
+              "Token created but pool ID not found. Check explorer and update manually."
             );
-            tokenAddress = account.address.toString(); // Temporary fallback
+            // Skip database storage if pool ID not found
+            return result;
           }
 
-          console.log("Final token address to store:", tokenAddress);
+          console.log("Final pool ID to store:", poolId);
 
+          // Store in database with V2 fields
           const dbResult = await tokenCreationApi.createToken({
             symbol: tokenData.symbol,
             name: tokenData.name,
             description: tokenData.description,
             logoUrl: tokenData.imageUrl,
-            address: tokenAddress,
-            decimals: decimals, // MUST match the on-chain decimal value!
+            address: poolId,
+            decimals: poolParams.decimals ?? 8,
             maxSupply: tokenData.maxSupply,
             creatorWalletAddress: account.address.toString(),
+
+            // V2 Specific Fields
+            reserveRatio: poolParams.reserveRatio ?? 50,
+            initialReserveApt: poolParams.initialReserveApt ?? 0.1,
+            marketCapThreshold: poolParams.thresholdUsd ?? 75000,
+            socialLinks: {
+              website: tokenData.website,
+              twitter: tokenData.twitter,
+              telegram: tokenData.telegram,
+              discord: tokenData.discord,
+            },
           });
 
           if (dbResult.success) {
             toast.success(`Token ${tokenData.symbol} created successfully!`, {
-              description: `FA Address: ${tokenAddress.slice(
-                0,
-                10
-              )}...${tokenAddress.slice(-8)}`,
+              description: `Pool ID: ${poolId.slice(0, 10)}...${poolId.slice(
+                -8
+              )}`,
               duration: 8000,
             });
           } else {

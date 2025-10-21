@@ -77,7 +77,7 @@ export function CreateQuestPage() {
   const router = useRouter();
   const { isConnected, address } = usePortfolioStore();
   const { createQuest: createQuestSupabase } = useSupabaseQuests();
-  const {  isCreating } = useQuestManagement();
+  const { isCreating } = useQuestManagement();
   const {
     createQuest: createQuestBlockchain,
     isLoading: isBlockchainLoading,
@@ -87,13 +87,13 @@ export function CreateQuestPage() {
 
   // Set default times: start in 1 hour, end in 1 week
   const defaultStartTime = new Date(Date.now() + 60 * 60 * 1000); // 1 hour from now
-  const defaultEndTime = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 1 week from now
+  const defaultEndTime = new Date(Date.now() + 1 * 24 * 60 * 60 * 1000); // 1 day from now
 
   const form = useForm<QuestFormValues>({
     resolver: zodResolver(questSchema),
     defaultValues: {
       name: "",
-      entryFee: 10,
+      entryFee: 1,
       startTime: formatDateTimeLocal(defaultStartTime),
       endTime: formatDateTimeLocal(defaultEndTime),
     },

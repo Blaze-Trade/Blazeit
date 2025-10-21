@@ -7,7 +7,11 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "db:migrate": "psql $DATABASE_URL -f migrations/add_v2_fields.sql",
+    "db:types": "supabase gen types typescript --project-id $SUPABASE_PROJECT_ID > src/lib/database.types.ts",
+    "contract:deploy": "./scripts/deploy-contracts.sh",
+    "v2:check": "echo '📋 V2 Deployment Checklist' && cat V2_DEPLOYMENT_CHECKLIST.md"
   },
   "dependencies": {
     "@aptos-labs/ts-sdk": "^5.1.0",

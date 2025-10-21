@@ -214,14 +214,6 @@ export function QuestTokenSelection({
       // Store transaction hash
       setTransactionHash(portfolioResult.hash || "");
 
-      // Step 2: Save portfolio to Supabase database using quest_portfolios table
-      const tokenSelections = selectedTokens.map((selection) => ({
-        tokenId: selection.token.id,
-        quantity: selection.quantity,
-        entryPrice: selection.token.price,
-        totalCost: selection.investmentAmount,
-      }));
-
       const portfolioResult_db = await submitQuestPortfolio(quest.id, address);
 
       if (portfolioResult_db.success) {

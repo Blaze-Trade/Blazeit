@@ -146,7 +146,7 @@ const formatAptosAddress = (address: string | null | undefined): string | undefi
 
 // TOKEN API
 const tokenApi = {
-  // Get all tokens
+  // Get all tokens (V2 with bonding curve and migration data)
   async getTokens(): Promise<
     ApiResponse<{ items: Token[]; next: string | null }>
   > {
@@ -170,6 +170,34 @@ const tokenApi = {
       logoUrl: token.logo_url || "",
       address: formatAptosAddress(token.address),
       decimals: token.decimals,
+      description: token.description,
+      creatorId: token.creator_id,
+
+      // V2 Bonding Curve Fields
+      reserveRatio: token.reserve_ratio,
+      reserveBalance: token.reserve_balance
+        ? parseFloat(token.reserve_balance)
+        : undefined,
+      initialReserveApt: token.initial_reserve_apt
+        ? parseFloat(token.initial_reserve_apt)
+        : undefined,
+      bondingCurveActive: token.bonding_curve_active,
+
+      // V2 Migration Fields
+      migrationCompleted: token.migration_completed,
+      migrationTimestamp: token.migration_timestamp,
+      hyperionPoolAddress: token.hyperion_pool_address,
+      marketCapThresholdUsd: token.market_cap_threshold_usd,
+
+      // V2 Trading Status
+      tradingEnabled: token.trading_enabled,
+
+      // V2 Social Links
+      socialLinks: token.social_links,
+
+      // Timestamps
+      createdAt: token.created_at,
+      updatedAt: token.updated_at,
     }));
 
     // Shuffle tokens for variety
@@ -1057,7 +1085,7 @@ export const tokenCreationApi = {
       const user = await createOrGetUser(requestData.creatorWalletAddress);
 
       const { data, error } = await supabase
-        .from('token_creation_requests')
+        .from("token_creation_requests")
         .insert({
           creator_id: user.id,
           name: requestData.name,
@@ -1083,7 +1111,7 @@ export const tokenCreationApi = {
     }
   },
 
-  // Create actual token in tokens table after blockchain creation
+  // Create actual token in tokens table after blockchain creation (V2)
   async createToken(tokenData: {
     symbol: string;
     name: string;
@@ -1093,12 +1121,23 @@ export const tokenCreationApi = {
     decimals: number;
     maxSupply?: number;
     creatorWalletAddress: string;
+
+    // V2 Bonding Curve Fields
+    reserveRatio?: number;
+    initialReserveApt?: number;
+    marketCapThreshold?: number;
+    socialLinks?: {
+      website?: string;
+      twitter?: string;
+      telegram?: string;
+      discord?: string;
+    };
   }): Promise<ApiResponse<Token>> {
     try {
       const user = await createOrGetUser(tokenData.creatorWalletAddress);
 
       const { data, error } = await supabase
-        .from('tokens')
+        .from("tokens")
         .insert({
           symbol: tokenData.symbol,
           name: tokenData.name,
@@ -1109,6 +1148,16 @@ export const tokenCreationApi = {
           max_supply: tokenData.maxSupply?.toString(),
           creator_id: user.id,
           is_active: true,
+
+          // V2 Bonding Curve Fields
+          reserve_ratio: tokenData.reserveRatio || 50,
+          reserve_balance: tokenData.initialReserveApt || 0.1,
+          initial_reserve_apt: tokenData.initialReserveApt || 0.1,
+          market_cap_threshold_usd: tokenData.marketCapThreshold || 75000,
+          bonding_curve_active: true,
+          migration_completed: false,
+          trading_enabled: true,
+          social_links: tokenData.socialLinks || {},
         })
         .select()
         .single();
@@ -1124,7 +1173,9 @@ export const tokenCreationApi = {
   },
 
   // Get user's token creation requests
-  async getUserTokenRequests(walletAddress: string): Promise<ApiResponse<TokenCreationRequest[]>> {
+  async getUserTokenRequests(
+    walletAddress: string
+  ): Promise<ApiResponse<TokenCreationRequest[]>> {
     try {
       const user = await getUserByWallet(walletAddress);
       if (!user) {
@@ -1132,10 +1183,10 @@ export const tokenCreationApi = {
       }
 
       const { data, error } = await supabase
-        .from('token_creation_requests')
-        .select('*')
-        .eq('creator_id', user.id)
-        .order('created_at', { ascending: false });
+        .from("token_creation_requests")
+        .select("*")
+        .eq("creator_id", user.id)
+        .order("created_at", { ascending: false });
 
       if (error) {
         return { success: false, error: error.message };

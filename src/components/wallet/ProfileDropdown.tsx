@@ -15,14 +15,20 @@ import { toast } from "sonner";
 
 export function ProfileDropdown() {
   const { disconnect, account } = useWallet();
-  const { address, theme, setTheme } = usePortfolioStore();
+  const { address, theme, setTheme, setDisconnected } = usePortfolioStore();
 
   const handleDisconnect = async () => {
     try {
+      console.log("🔄 Attempting to disconnect wallet from ProfileDropdown...");
       await disconnect();
+      console.log("✅ Wallet disconnected successfully from ProfileDropdown");
+      setDisconnected(); // Update portfolio store
       toast.success("Wallet disconnected successfully");
     } catch (error) {
-      console.error("Failed to disconnect wallet:", error);
+      console.error(
+        "❌ Failed to disconnect wallet from ProfileDropdown:",
+        error
+      );
       toast.error("Failed to disconnect wallet");
     }
   };
