@@ -521,6 +521,14 @@ export function buildBuyPayload(
   const aptAmountOctas = aptToOctas(aptAmount);
   const deadline = Math.floor(Date.now() / 1000) + (deadlineMinutes * 60);
 
+  minTokensOut = 0
+  // console.log("🔍 Building buy payload:", {
+  //   function: `${CONTRACT_ADDRESS_V2}::launchpad_v2::buy` as `${string}::${string}::${string}`,
+  //   poolId,
+  //   aptAmountOctas,
+  //   minTokensOut,
+  //   deadline
+  // });
   return {
     function: `${CONTRACT_ADDRESS_V2}::launchpad_v2::buy` as `${string}::${string}::${string}`,
     functionArguments: [
