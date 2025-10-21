@@ -1,3 +1,4 @@
+import { getAptosNetwork } from "@/lib/constants";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { toast } from "sonner";
 
@@ -5,7 +6,7 @@ let aptosSingleton: any | null = null;
 async function getAptosClient() {
   if (aptosSingleton) return aptosSingleton;
   const mod = await import("@aptos-labs/ts-sdk");
-  const config = new mod.AptosConfig({ network: mod.Network.DEVNET });
+  const config = new mod.AptosConfig({ network: getAptosNetwork() });
   aptosSingleton = new mod.Aptos(config);
   return aptosSingleton;
 }
@@ -33,11 +34,9 @@ export function useAptos() {
 
       // Simple transaction payload that will definitely work
       const transactionPayload = {
-        data: {
-          function: "0x1::aptos_account::transfer",
-          typeArguments: [],
-          functionArguments: [recipientAddress, amount * 100000000], // Convert to octas
-        },
+        function: "0x1::aptos_account::transfer",
+        typeArguments: [],
+        functionArguments: [recipientAddress, amount * 100000000], // Convert to octas
       };
 
       // Sign and submit the transaction
@@ -45,7 +44,9 @@ export function useAptos() {
         "Calling signAndSubmitTransaction with payload:",
         transactionPayload
       );
-      const result = await signAndSubmitTransaction(transactionPayload);
+      const result = await signAndSubmitTransaction({
+        data: transactionPayload,
+      } as any);
       console.log("Transaction result:", result);
 
       if (!result || !result.hash) {
@@ -73,8 +74,8 @@ export function useAptos() {
         } else if (error) {
           errorMessage = String(error);
         }
-      } catch (parseError) {
-        errorMessage = "Error parsing error message";
+      } catch (error) {
+        errorMessage = "Error parsing error message: " + error;
       }
 
       const isUserRejection =
@@ -106,7 +107,9 @@ export function useAptos() {
         function: `0x1::account::set_object_signer`,
         functionArguments: [],
       };
-      const result = await signAndSubmitTransaction(mockPayload);
+      const result = await signAndSubmitTransaction({
+        data: mockPayload,
+      } as any);
       const client = await getAptosClient();
       await client.waitForTransaction({ transactionHash: result.hash });
       toast.success(`${description} successful!`, {

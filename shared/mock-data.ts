@@ -1,4 +1,4 @@
-import type { Quest, Token } from "./types";
+import type { Token } from "./types";
 export const MOCK_TOKENS: Token[] = [
   {
     id: "aptos",
@@ -59,43 +59,5 @@ export const MOCK_TOKENS: Token[] = [
     address:
       "0x0000000000000000000000000000000000000000000000000000000000000005",
     decimals: 9,
-  },
-];
-export const MOCK_QUESTS: Quest[] = [
-  {
-    id: "q1",
-    name: "Aptos Arena: The Alpha Run",
-    entryFee: 10,
-    prizePool: 1000,
-    duration: "7 Days",
-    participants: 42,
-    status: "active",
-  },
-  {
-    id: "q2",
-    name: "DeFi Degens: High-Risk Rumble",
-    entryFee: 50,
-    prizePool: 15000,
-    duration: "3 Days",
-    participants: 121,
-    status: "upcoming",
-  },
-  {
-    id: "q3",
-    name: "Meme Coin Mayhem",
-    entryFee: 5,
-    prizePool: 500,
-    duration: "24 Hours",
-    participants: 350,
-    status: "upcoming",
-  },
-  {
-    id: "q4",
-    name: "The Genesis Block Challenge",
-    entryFee: 100,
-    prizePool: 50000,
-    duration: "30 Days",
-    participants: 8,
-    status: "ended",
   },
 ];

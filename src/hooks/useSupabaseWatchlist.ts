@@ -1,13 +1,13 @@
 import { supabaseApi } from '@/lib/supabase-api';
 import type { Token } from '@shared/types';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from "react";
 
 export function useSupabaseWatchlist(walletAddress: string | null) {
   const [watchlist, setWatchlist] = useState<Token[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchWatchlist = async () => {
+  const fetchWatchlist = useCallback(async () => {
     if (!walletAddress) {
       setWatchlist([]);
       setLoading(false);
@@ -22,18 +22,18 @@ export function useSupabaseWatchlist(walletAddress: string | null) {
       if (result.success && result.data) {
         setWatchlist(result.data.items);
       } else {
-        setError(result.error || 'Failed to fetch watchlist');
+        setError(result.error || "Failed to fetch watchlist");
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to fetch watchlist');
+      setError(err.message || "Failed to fetch watchlist");
     } finally {
       setLoading(false);
     }
-  };
+  }, [walletAddress]);
 
   useEffect(() => {
     fetchWatchlist();
-  }, [walletAddress]);
+  }, [fetchWatchlist]);
 
   const addToWatchlist = async (token: Token) => {
     if (!walletAddress) {

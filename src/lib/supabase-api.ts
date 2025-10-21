@@ -145,14 +145,16 @@ const formatAptosAddress = (address: string | null | undefined): string | undefi
 };
 
 // TOKEN API
-export const tokenApi = {
-  // Get all tokens
-  async getTokens(): Promise<ApiResponse<{ items: Token[]; next: string | null }>> {
+const tokenApi = {
+  // Get all tokens (V2 with bonding curve and migration data)
+  async getTokens(): Promise<
+    ApiResponse<{ items: Token[]; next: string | null }>
+  > {
     const { data, error } = await supabase
-      .from('tokens')
-      .select('*')
-      .eq('is_active', true)
-      .order('market_cap', { ascending: false });
+      .from("tokens")
+      .select("*")
+      .eq("is_active", true)
+      .order("market_cap", { ascending: false });
 
     if (error) {
       return { success: false, error: error.message };
@@ -168,6 +170,34 @@ export const tokenApi = {
       logoUrl: token.logo_url || "",
       address: formatAptosAddress(token.address),
       decimals: token.decimals,
+      description: token.description,
+      creatorId: token.creator_id,
+
+      // V2 Bonding Curve Fields
+      reserveRatio: token.reserve_ratio,
+      reserveBalance: token.reserve_balance
+        ? parseFloat(token.reserve_balance)
+        : undefined,
+      initialReserveApt: token.initial_reserve_apt
+        ? parseFloat(token.initial_reserve_apt)
+        : undefined,
+      bondingCurveActive: token.bonding_curve_active,
+
+      // V2 Migration Fields
+      migrationCompleted: token.migration_completed,
+      migrationTimestamp: token.migration_timestamp,
+      hyperionPoolAddress: token.hyperion_pool_address,
+      marketCapThresholdUsd: token.market_cap_threshold_usd,
+
+      // V2 Trading Status
+      tradingEnabled: token.trading_enabled,
+
+      // V2 Social Links
+      socialLinks: token.social_links,
+
+      // Timestamps
+      createdAt: token.created_at,
+      updatedAt: token.updated_at,
     }));
 
     // Shuffle tokens for variety
@@ -179,10 +209,10 @@ export const tokenApi = {
   // Get token by symbol
   async getTokenBySymbol(symbol: string): Promise<ApiResponse<Token>> {
     const { data, error } = await supabase
-      .from('tokens')
-      .select('*')
-      .eq('symbol', symbol)
-      .eq('is_active', true)
+      .from("tokens")
+      .select("*")
+      .eq("symbol", symbol)
+      .eq("is_active", true)
       .single();
 
     if (error) {
@@ -196,7 +226,7 @@ export const tokenApi = {
       price: parseFloat(data.price),
       change24h: parseFloat(data.change_24h),
       marketCap: parseFloat(data.market_cap),
-      logoUrl: data.logo_url || '',
+      logoUrl: data.logo_url || "",
       address: data.address,
       decimals: data.decimals,
     };
@@ -205,29 +235,34 @@ export const tokenApi = {
   },
 
   // Update token price
-  async updateTokenPrice(symbol: string, price: number, change24h: number, marketCap: number): Promise<ApiResponse<void>> {
+  async updateTokenPrice(
+    symbol: string,
+    price: number,
+    change24h: number,
+    marketCap: number
+  ): Promise<ApiResponse<void>> {
     const { error } = await supabase
-      .from('tokens')
+      .from("tokens")
       .update({
         price: price.toString(),
         change_24h: change24h.toString(),
         market_cap: marketCap.toString(),
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       })
-      .eq('symbol', symbol);
+      .eq("symbol", symbol);
 
     return handleResponse(null, error);
   },
 };
 
 // QUEST API
-export const questApi = {
+const questApi = {
   // Get all quests
   async getQuests(): Promise<
     ApiResponse<{ items: Quest[]; next: string | null }>
   > {
     try {
-      const { data, error } = await supabase.rpc('get_all_quests');
+      const { data, error } = await supabase.rpc("get_all_quests");
 
       if (error) {
         return { success: false, error: error.message };
@@ -270,8 +305,12 @@ export const questApi = {
           return aEnd - bEnd;
         } else if (a.status === "upcoming") {
           // Upcoming: show starting soonest first
-          const aStart = a.startTime ? new Date(a.startTime).getTime() : Infinity;
-          const bStart = b.startTime ? new Date(b.startTime).getTime() : Infinity;
+          const aStart = a.startTime
+            ? new Date(a.startTime).getTime()
+            : Infinity;
+          const bStart = b.startTime
+            ? new Date(b.startTime).getTime()
+            : Infinity;
           return aStart - bStart;
         } else {
           // Ended: show most recently ended first
@@ -283,15 +322,15 @@ export const questApi = {
 
       return { success: true, data: { items: sortedQuests, next: null } };
     } catch (error) {
-      return { success: false, error: 'Failed to fetch quests' };
+      return { success: false, error: "Failed to fetch quests: " + error };
     }
   },
 
   // Get quest by ID using centralized RPC function
   async getQuest(questId: string): Promise<ApiResponse<Quest>> {
     try {
-      const { data, error } = await supabase.rpc('get_quest_details', {
-        quest_uuid: questId
+      const { data, error } = await supabase.rpc("get_quest_details", {
+        quest_uuid: questId,
       });
 
       if (error) {
@@ -320,7 +359,7 @@ export const questApi = {
 
       return { success: true, data: quest };
     } catch (error) {
-      return { success: false, error: 'Failed to fetch quest details' };
+      return { success: false, error: "Failed to fetch quest details" + error };
     }
   },
 
@@ -417,9 +456,9 @@ export const questApi = {
     walletAddress: string
   ): Promise<ApiResponse<QuestPortfolio>> {
     try {
-      const { data, error } = await supabase.rpc('join_quest', {
+      const { data, error } = await supabase.rpc("join_quest", {
         quest_uuid: questId,
-        user_wallet_address: walletAddress
+        user_wallet_address: walletAddress,
       });
 
       if (error) {
@@ -451,9 +490,9 @@ export const questApi = {
     walletAddress: string
   ): Promise<ApiResponse<QuestPortfolio>> {
     try {
-      const { data, error } = await supabase.rpc('get_user_quest_portfolio', {
+      const { data, error } = await supabase.rpc("get_user_quest_portfolio", {
         quest_uuid: questId,
-        user_wallet_address: walletAddress
+        user_wallet_address: walletAddress,
       });
 
       if (error) {
@@ -467,8 +506,8 @@ export const questApi = {
         price: holding.entryPrice, // Use entry price for quest context
         change24h: 0, // Not relevant in quest context
         marketCap: 0, // Not relevant in quest context
-        logoUrl: '', // Not provided by RPC
-        address: '', // Not provided by RPC
+        logoUrl: "", // Not provided by RPC
+        address: "", // Not provided by RPC
         decimals: 8, // Default
         quantity: holding.quantity,
         cost: holding.totalCost,
@@ -510,6 +549,10 @@ export const questApi = {
         .eq("user_id", user.id)
         .maybeSingle();
 
+      if (participantError) {
+        return { success: false, error: participantError.message };
+      }
+
       if (!participant) {
         return { success: false, error: "User has not joined this quest" };
       }
@@ -524,6 +567,10 @@ export const questApi = {
         .eq("user_id", user.id)
         .eq("token_id", token.id)
         .maybeSingle();
+
+      if (holdingError) {
+        return { success: false, error: holdingError.message };
+      }
 
       if (existingHolding) {
         // Update existing holding
@@ -648,22 +695,21 @@ export const questApi = {
       quantity: number;
       entryPrice: number;
       totalCost: number;
-    }>,
-    blockchainTxHash?: string
+    }>
   ): Promise<ApiResponse<void>> {
     try {
       // Convert token selections to the format expected by the RPC function
-      const portfolioData = tokenSelections.map(selection => ({
+      const portfolioData = tokenSelections.map((selection) => ({
         tokenId: selection.tokenId,
         quantity: selection.quantity,
         entryPrice: selection.entryPrice,
-        totalCost: selection.totalCost
+        totalCost: selection.totalCost,
       }));
 
-      const { data, error } = await supabase.rpc('submit_quest_portfolio', {
+      const { data, error } = await supabase.rpc("submit_quest_portfolio", {
         quest_uuid: questId,
         user_wallet_address: walletAddress,
-        portfolio_data: portfolioData
+        portfolio_data: portfolioData,
       });
 
       if (error) {
@@ -685,8 +731,8 @@ export const questApi = {
     questId: string
   ): Promise<ApiResponse<LeaderboardEntry[]>> {
     try {
-      const { data, error } = await supabase.rpc('get_quest_leaderboard', {
-        quest_uuid: questId
+      const { data, error } = await supabase.rpc("get_quest_leaderboard", {
+        quest_uuid: questId,
       });
 
       if (error) {
@@ -709,9 +755,11 @@ export const questApi = {
 };
 
 // WATCHLIST API
-export const watchlistApi = {
+const watchlistApi = {
   // Get user watchlist
-  async getWatchlist(walletAddress: string): Promise<ApiResponse<{ items: Token[] }>> {
+  async getWatchlist(
+    walletAddress: string
+  ): Promise<ApiResponse<{ items: Token[] }>> {
     try {
       const user = await getUserByWallet(walletAddress);
       if (!user) {
@@ -719,25 +767,27 @@ export const watchlistApi = {
       }
 
       const { data, error } = await supabase
-        .from('watchlists')
-        .select(`
+        .from("watchlists")
+        .select(
+          `
           token:tokens(*)
-        `)
-        .eq('user_id', user.id);
+        `
+        )
+        .eq("user_id", user.id);
 
       if (error) {
         return { success: false, error: error.message };
       }
 
       const tokens: Token[] = (data || []).map((item: any) => ({
-        id: item.token?.id || '',
-        symbol: item.token?.symbol || '',
-        name: item.token?.name || '',
-        price: parseFloat(item.token?.price || '0'),
-        change24h: parseFloat(item.token?.change_24h || '0'),
-        marketCap: parseFloat(item.token?.market_cap || '0'),
-        logoUrl: item.token?.logo_url || '',
-        address: item.token?.address || '',
+        id: item.token?.id || "",
+        symbol: item.token?.symbol || "",
+        name: item.token?.name || "",
+        price: parseFloat(item.token?.price || "0"),
+        change24h: parseFloat(item.token?.change_24h || "0"),
+        marketCap: parseFloat(item.token?.market_cap || "0"),
+        logoUrl: item.token?.logo_url || "",
+        address: item.token?.address || "",
         decimals: item.token?.decimals || 8,
       }));
 
@@ -748,18 +798,20 @@ export const watchlistApi = {
   },
 
   // Add token to watchlist
-  async addToWatchlist(walletAddress: string, tokenId: string): Promise<ApiResponse<void>> {
+  async addToWatchlist(
+    walletAddress: string,
+    tokenId: string
+  ): Promise<ApiResponse<void>> {
     try {
       const user = await createOrGetUser(walletAddress);
 
-      const { error } = await supabase
-        .from('watchlists')
-        .insert({
-          user_id: user.id,
-          token_id: tokenId,
-        });
+      const { error } = await supabase.from("watchlists").insert({
+        user_id: user.id,
+        token_id: tokenId,
+      });
 
-      if (error && error.code !== '23505') { // 23505 = unique constraint violation (already exists)
+      if (error && error.code !== "23505") {
+        // 23505 = unique constraint violation (already exists)
         return { success: false, error: error.message };
       }
 
@@ -770,7 +822,10 @@ export const watchlistApi = {
   },
 
   // Remove token from watchlist
-  async removeFromWatchlist(walletAddress: string, tokenId: string): Promise<ApiResponse<void>> {
+  async removeFromWatchlist(
+    walletAddress: string,
+    tokenId: string
+  ): Promise<ApiResponse<void>> {
     try {
       const user = await getUserByWallet(walletAddress);
       if (!user) {
@@ -778,10 +833,10 @@ export const watchlistApi = {
       }
 
       const { error } = await supabase
-        .from('watchlists')
+        .from("watchlists")
         .delete()
-        .eq('user_id', user.id)
-        .eq('token_id', tokenId);
+        .eq("user_id", user.id)
+        .eq("token_id", tokenId);
 
       return handleResponse(null, error);
     } catch (error: any) {
@@ -798,9 +853,9 @@ export const watchlistApi = {
       }
 
       const { error } = await supabase
-        .from('watchlists')
+        .from("watchlists")
         .delete()
-        .eq('user_id', user.id);
+        .eq("user_id", user.id);
 
       return handleResponse(null, error);
     } catch (error: any) {
@@ -810,9 +865,11 @@ export const watchlistApi = {
 };
 
 // USER PORTFOLIO API
-export const portfolioApi = {
+const portfolioApi = {
   // Get user portfolio
-  async getUserPortfolio(walletAddress: string): Promise<ApiResponse<Holding[]>> {
+  async getUserPortfolio(
+    walletAddress: string
+  ): Promise<ApiResponse<Holding[]>> {
     try {
       const user = await getUserByWallet(walletAddress);
       if (!user) {
@@ -820,25 +877,27 @@ export const portfolioApi = {
       }
 
       const { data, error } = await supabase
-        .from('user_portfolios')
-        .select(`
+        .from("user_portfolios")
+        .select(
+          `
           *,
           token:tokens(*)
-        `)
-        .eq('user_id', user.id);
+        `
+        )
+        .eq("user_id", user.id);
 
       if (error) {
         return { success: false, error: error.message };
       }
 
-      const holdings: Holding[] = data.map(holding => ({
+      const holdings: Holding[] = data.map((holding) => ({
         id: holding.token.id,
         symbol: holding.token.symbol,
         name: holding.token.name,
         price: parseFloat(holding.token.price),
         change24h: parseFloat(holding.token.change_24h),
         marketCap: parseFloat(holding.token.market_cap),
-        logoUrl: holding.token.logo_url || '',
+        logoUrl: holding.token.logo_url || "",
         address: holding.token.address,
         decimals: holding.token.decimals,
         quantity: parseFloat(holding.quantity),
@@ -853,17 +912,21 @@ export const portfolioApi = {
   },
 
   // Buy token (real trading)
-  async buyToken(walletAddress: string, token: Token, quantity: number): Promise<ApiResponse<void>> {
+  async buyToken(
+    walletAddress: string,
+    token: Token,
+    quantity: number
+  ): Promise<ApiResponse<void>> {
     try {
       const user = await createOrGetUser(walletAddress);
       const cost = token.price * quantity;
 
       // Check if user already has this token
       const { data: existingHolding } = await supabase
-        .from('user_portfolios')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('token_id', token.id)
+        .from("user_portfolios")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("token_id", token.id)
         .single();
 
       if (existingHolding) {
@@ -873,31 +936,29 @@ export const portfolioApi = {
         const newAverageCost = newCost / newQuantity;
 
         const { error } = await supabase
-          .from('user_portfolios')
+          .from("user_portfolios")
           .update({
             quantity: newQuantity.toString(),
             total_cost: newCost.toString(),
             average_cost: newAverageCost.toString(),
             current_value: (newQuantity * token.price).toString(),
-            updated_at: new Date().toISOString()
+            updated_at: new Date().toISOString(),
           })
-          .eq('id', existingHolding.id);
+          .eq("id", existingHolding.id);
 
         if (error) {
           return { success: false, error: error.message };
         }
       } else {
         // Create new holding
-        const { error } = await supabase
-          .from('user_portfolios')
-          .insert({
-            user_id: user.id,
-            token_id: token.id,
-            quantity: quantity.toString(),
-            average_cost: token.price.toString(),
-            total_cost: cost.toString(),
-            current_value: cost.toString(),
-          });
+        const { error } = await supabase.from("user_portfolios").insert({
+          user_id: user.id,
+          token_id: token.id,
+          quantity: quantity.toString(),
+          average_cost: token.price.toString(),
+          total_cost: cost.toString(),
+          current_value: cost.toString(),
+        });
 
         if (error) {
           return { success: false, error: error.message };
@@ -905,15 +966,13 @@ export const portfolioApi = {
       }
 
       // Record transaction
-      await supabase
-        .from('transactions')
-        .insert({
-          user_id: user.id,
-          type: 'trade_buy',
-          amount: cost.toString(),
-          token_symbol: token.symbol,
-          status: 'completed',
-        });
+      await supabase.from("transactions").insert({
+        user_id: user.id,
+        type: "trade_buy",
+        amount: cost.toString(),
+        token_symbol: token.symbol,
+        status: "completed",
+      });
 
       return { success: true };
     } catch (error: any) {
@@ -922,33 +981,39 @@ export const portfolioApi = {
   },
 
   // Sell token (real trading)
-  async sellToken(walletAddress: string, tokenId: string, quantity: number): Promise<ApiResponse<void>> {
+  async sellToken(
+    walletAddress: string,
+    tokenId: string,
+    quantity: number
+  ): Promise<ApiResponse<void>> {
     try {
       const user = await getUserByWallet(walletAddress);
       if (!user) {
-        return { success: false, error: 'User not found' };
+        return { success: false, error: "User not found" };
       }
 
       // Get existing holding
       const { data: holding, error: fetchError } = await supabase
-        .from('user_portfolios')
-        .select(`
+        .from("user_portfolios")
+        .select(
+          `
           *,
           token:tokens(*)
-        `)
-        .eq('user_id', user.id)
-        .eq('token_id', tokenId)
+        `
+        )
+        .eq("user_id", user.id)
+        .eq("token_id", tokenId)
         .single();
 
       if (fetchError || !holding) {
-        return { success: false, error: 'Token not found in portfolio' };
+        return { success: false, error: "Token not found in portfolio" };
       }
 
       const currentQuantity = parseFloat(holding.quantity);
       const sellQuantity = Math.min(quantity, currentQuantity);
 
       if (sellQuantity <= 0) {
-        return { success: false, error: 'Invalid sell quantity' };
+        return { success: false, error: "Invalid sell quantity" };
       }
 
       const proceeds = sellQuantity * parseFloat(holding.token.price);
@@ -957,9 +1022,9 @@ export const portfolioApi = {
       if (newQuantity === 0) {
         // Remove holding completely
         const { error } = await supabase
-          .from('user_portfolios')
+          .from("user_portfolios")
           .delete()
-          .eq('id', holding.id);
+          .eq("id", holding.id);
 
         if (error) {
           return { success: false, error: error.message };
@@ -969,14 +1034,16 @@ export const portfolioApi = {
         const newCost = newQuantity * parseFloat(holding.average_cost);
 
         const { error } = await supabase
-          .from('user_portfolios')
+          .from("user_portfolios")
           .update({
             quantity: newQuantity.toString(),
             total_cost: newCost.toString(),
-            current_value: (newQuantity * parseFloat(holding.token.price)).toString(),
-            updated_at: new Date().toISOString()
+            current_value: (
+              newQuantity * parseFloat(holding.token.price)
+            ).toString(),
+            updated_at: new Date().toISOString(),
           })
-          .eq('id', holding.id);
+          .eq("id", holding.id);
 
         if (error) {
           return { success: false, error: error.message };
@@ -984,15 +1051,13 @@ export const portfolioApi = {
       }
 
       // Record transaction
-      await supabase
-        .from('transactions')
-        .insert({
-          user_id: user.id,
-          type: 'trade_sell',
-          amount: proceeds.toString(),
-          token_symbol: holding.token.symbol,
-          status: 'completed',
-        });
+      await supabase.from("transactions").insert({
+        user_id: user.id,
+        type: "trade_sell",
+        amount: proceeds.toString(),
+        token_symbol: holding.token.symbol,
+        status: "completed",
+      });
 
       return { success: true };
     } catch (error: any) {
@@ -1020,7 +1085,7 @@ export const tokenCreationApi = {
       const user = await createOrGetUser(requestData.creatorWalletAddress);
 
       const { data, error } = await supabase
-        .from('token_creation_requests')
+        .from("token_creation_requests")
         .insert({
           creator_id: user.id,
           name: requestData.name,
@@ -1046,7 +1111,7 @@ export const tokenCreationApi = {
     }
   },
 
-  // Create actual token in tokens table after blockchain creation
+  // Create actual token in tokens table after blockchain creation (V2)
   async createToken(tokenData: {
     symbol: string;
     name: string;
@@ -1056,12 +1121,23 @@ export const tokenCreationApi = {
     decimals: number;
     maxSupply?: number;
     creatorWalletAddress: string;
+
+    // V2 Bonding Curve Fields
+    reserveRatio?: number;
+    initialReserveApt?: number;
+    marketCapThreshold?: number;
+    socialLinks?: {
+      website?: string;
+      twitter?: string;
+      telegram?: string;
+      discord?: string;
+    };
   }): Promise<ApiResponse<Token>> {
     try {
       const user = await createOrGetUser(tokenData.creatorWalletAddress);
 
       const { data, error } = await supabase
-        .from('tokens')
+        .from("tokens")
         .insert({
           symbol: tokenData.symbol,
           name: tokenData.name,
@@ -1072,6 +1148,16 @@ export const tokenCreationApi = {
           max_supply: tokenData.maxSupply?.toString(),
           creator_id: user.id,
           is_active: true,
+
+          // V2 Bonding Curve Fields
+          reserve_ratio: tokenData.reserveRatio || 50,
+          reserve_balance: tokenData.initialReserveApt || 0.1,
+          initial_reserve_apt: tokenData.initialReserveApt || 0.1,
+          market_cap_threshold_usd: tokenData.marketCapThreshold || 75000,
+          bonding_curve_active: true,
+          migration_completed: false,
+          trading_enabled: true,
+          social_links: tokenData.socialLinks || {},
         })
         .select()
         .single();
@@ -1087,7 +1173,9 @@ export const tokenCreationApi = {
   },
 
   // Get user's token creation requests
-  async getUserTokenRequests(walletAddress: string): Promise<ApiResponse<TokenCreationRequest[]>> {
+  async getUserTokenRequests(
+    walletAddress: string
+  ): Promise<ApiResponse<TokenCreationRequest[]>> {
     try {
       const user = await getUserByWallet(walletAddress);
       if (!user) {
@@ -1095,10 +1183,10 @@ export const tokenCreationApi = {
       }
 
       const { data, error } = await supabase
-        .from('token_creation_requests')
-        .select('*')
-        .eq('creator_id', user.id)
-        .order('created_at', { ascending: false });
+        .from("token_creation_requests")
+        .select("*")
+        .eq("creator_id", user.id)
+        .order("created_at", { ascending: false });
 
       if (error) {
         return { success: false, error: error.message };
@@ -1112,7 +1200,7 @@ export const tokenCreationApi = {
 };
 
 // USER BALANCE API
-export const balanceApi = {
+const balanceApi = {
   // Get user balance
   async getUserBalance(walletAddress: string): Promise<ApiResponse<number>> {
     try {
@@ -1128,31 +1216,32 @@ export const balanceApi = {
   },
 
   // Deposit funds
-  async depositFunds(walletAddress: string, amount: number): Promise<ApiResponse<void>> {
+  async depositFunds(
+    walletAddress: string,
+    amount: number
+  ): Promise<ApiResponse<void>> {
     try {
       const user = await createOrGetUser(walletAddress);
 
       const { error } = await supabase
-        .from('users')
+        .from("users")
         .update({
           balance: (user.balance + amount).toString(),
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         })
-        .eq('id', user.id);
+        .eq("id", user.id);
 
       if (error) {
         return { success: false, error: error.message };
       }
 
       // Record transaction
-      await supabase
-        .from('transactions')
-        .insert({
-          user_id: user.id,
-          type: 'deposit',
-          amount: amount.toString(),
-          status: 'completed',
-        });
+      await supabase.from("transactions").insert({
+        user_id: user.id,
+        type: "deposit",
+        amount: amount.toString(),
+        status: "completed",
+      });
 
       return { success: true };
     } catch (error: any) {
@@ -1161,35 +1250,35 @@ export const balanceApi = {
   },
 
   // Withdraw funds
-  async withdrawFunds(walletAddress: string, amount: number): Promise<ApiResponse<void>> {
+  async withdrawFunds(
+    walletAddress: string,
+    amount: number
+  ): Promise<ApiResponse<void>> {
     try {
       const user = await getUserByWallet(walletAddress);
       if (!user) {
-        return { success: false, error: 'User not found' };
+        return { success: false, error: "User not found" };
       }
 
-
       const { error } = await supabase
-        .from('users')
+        .from("users")
         .update({
           balance: (user.balance - amount).toString(),
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         })
-        .eq('id', user.id);
+        .eq("id", user.id);
 
       if (error) {
         return { success: false, error: error.message };
       }
 
       // Record transaction
-      await supabase
-        .from('transactions')
-        .insert({
-          user_id: user.id,
-          type: 'withdrawal',
-          amount: amount.toString(),
-          status: 'completed',
-        });
+      await supabase.from("transactions").insert({
+        user_id: user.id,
+        type: "withdrawal",
+        amount: amount.toString(),
+        status: "completed",
+      });
 
       return { success: true };
     } catch (error: any) {
@@ -1198,7 +1287,9 @@ export const balanceApi = {
   },
 
   // Get user transactions
-  async getUserTransactions(walletAddress: string): Promise<ApiResponse<Transaction[]>> {
+  async getUserTransactions(
+    walletAddress: string
+  ): Promise<ApiResponse<Transaction[]>> {
     try {
       const user = await getUserByWallet(walletAddress);
       if (!user) {
@@ -1206,10 +1297,10 @@ export const balanceApi = {
       }
 
       const { data, error } = await supabase
-        .from('transactions')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+        .from("transactions")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
 
       if (error) {
         return { success: false, error: error.message };

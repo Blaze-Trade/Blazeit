@@ -24,7 +24,7 @@ export function useQuestManagement() {
     isLoading,
   } = useLaunchpadIntegration();
 
-  const { joinQuest: storeJoinQuest, setActiveQuest } = usePortfolioStore();
+  const { joinQuest: storeJoinQuest } = usePortfolioStore();
   const [isCreating, setIsCreating] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
 
@@ -99,7 +99,7 @@ export function useQuestManagement() {
     [account, contractJoinQuest, hasJoinedQuest, storeJoinQuest]
   );
 
-  const endQuest = useCallback(async (questId: string, winner: string) => {
+  const endQuest = useCallback(async () => {
     // Quest ending functionality not implemented in contract yet
     console.warn("Quest ending functionality not implemented");
     toast.error("Quest ending functionality not available");

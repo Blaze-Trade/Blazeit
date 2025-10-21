@@ -1,0 +1,53 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap');
+/* We are not using the Cal Sans from the template, as it's not a real font.
+   We will use a similar impactful font that is web-safe or easily importable.
+   For this project, we will rely on the system-ui stack defined in tailwind.config.js for display fonts.
+   The 'Cal Sans' in the config will fallback gracefully. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+@layer base {
+  :root {
+    --background: 0 0% 96%; /* #F5F5F5 */
+    --foreground: 0 0% 7%; /* #111111 */
+    --primary: 0 0% 7%;
+    --primary-foreground: 0 0% 96%;
+    --muted: 0 0% 90%;
+    --muted-foreground: 0 0% 45%;
+    --border: 0 0% 7%;
+    --ring: 16 100% 50%; /* #FF4500 */
+    --card: 0 0% 96%;
+    --card-foreground: 0 0% 7%;
+    --radius: 0rem;
+  }
+  .dark {
+    --background: 0 0% 7%; /* #111111 */
+    --foreground: 0 0% 96%; /* #F5F5F5 */
+    --primary: 0 0% 96%;
+    --primary-foreground: 0 0% 7%;
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 65%;
+    --border: 0 0% 96%;
+    --ring: 16 100% 50%;
+    --card: 0 0% 7%;
+    --card-foreground: 0 0% 96%;
+    --radius: 0rem;
+  }
+  * {
+    @apply border-border;
+  }
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  body {
+    @apply bg-blaze-white text-blaze-black font-sans;
+    text-rendering: optimizeLegibility;
+  }
+  /* Brutalist Focus Ring */
+  *:focus-visible {
+    @apply outline-none ring-2 ring-blaze-orange ring-offset-2 ring-offset-blaze-white;
+  }
+}
+

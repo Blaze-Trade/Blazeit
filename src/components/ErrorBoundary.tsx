@@ -1,5 +1,7 @@
-import React, { Component, ErrorInfo, ReactNode } from "react";
+"use client";
+
 import { errorReporter } from "@/lib/errorReporter";
+import { Component, ErrorInfo, ReactNode } from "react";
 import { ErrorFallback } from "./ErrorFallback";
 
 interface Props {

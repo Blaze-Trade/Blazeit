@@ -1,13 +1,13 @@
 import { supabaseApi } from '@/lib/supabase-api';
 import type { Holding } from '@shared/types';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from "react";
 
 export function useSupabasePortfolio(walletAddress: string | null) {
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchPortfolio = async () => {
+  const fetchPortfolio = useCallback(async () => {
     if (!walletAddress) {
       setHoldings([]);
       setLoading(false);
@@ -17,23 +17,25 @@ export function useSupabasePortfolio(walletAddress: string | null) {
     try {
       setLoading(true);
       setError(null);
-      const result = await supabaseApi.portfolio.getUserPortfolio(walletAddress);
+      const result = await supabaseApi.portfolio.getUserPortfolio(
+        walletAddress
+      );
 
       if (result.success && result.data) {
         setHoldings(result.data);
       } else {
-        setError(result.error || 'Failed to fetch portfolio');
+        setError(result.error || "Failed to fetch portfolio");
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to fetch portfolio');
+      setError(err.message || "Failed to fetch portfolio");
     } finally {
       setLoading(false);
     }
-  };
+  }, [walletAddress]);
 
   useEffect(() => {
     fetchPortfolio();
-  }, [walletAddress]);
+  }, [fetchPortfolio]);
 
   const buyToken = async (token: any, quantity: number) => {
     if (!walletAddress) {

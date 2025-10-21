@@ -1,20 +1,21 @@
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
-import { useAptos } from '@/hooks/useAptos';
-import { useBlockchainTokens } from '@/hooks/useBlockchainTokens';
+"use client";
+
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import { useBlockchainTokens } from "@/hooks/useBlockchainTokens";
 import { useQuestStaking } from "@/hooks/useQuestStaking";
-import { useSupabasePortfolio } from "@/hooks/useSupabasePortfolio";
 import { useSupabaseQuests } from "@/hooks/useSupabaseQuests";
 import { useSupabaseTokens } from "@/hooks/useSupabaseTokens";
 import { formatDuration } from "@/lib/utils";
 import { usePortfolioStore } from "@/stores/portfolioStore";
 import type { Quest, Token } from "@shared/types";
 import { AlertTriangle, ArrowLeft, Check, Minus, Plus } from "lucide-react";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 interface TokenSelection {
@@ -32,14 +33,10 @@ export function QuestTokenSelection({
   quest,
   onBack,
 }: QuestTokenSelectionProps) {
-  const navigate = useNavigate();
-  const { transferAPT } = useAptos();
+  const router = useRouter();
   const { address, joinQuest } = usePortfolioStore();
-  const { joinQuest: joinQuestSupabase, submitQuestPortfolio } =
-    useSupabaseQuests();
-  const { buyToken: buyTokenSupabase } = useSupabasePortfolio(address);
-  const { selectPortfolio: selectPortfolioBlockchain, aptToOctas } =
-    useQuestStaking();
+  const { joinQuest: submitQuestPortfolio } = useSupabaseQuests();
+  const { selectPortfolio: selectPortfolioBlockchain } = useQuestStaking();
   const {
     tokens: supabaseTokens,
     loading: supabaseLoading,
@@ -217,20 +214,7 @@ export function QuestTokenSelection({
       // Store transaction hash
       setTransactionHash(portfolioResult.hash || "");
 
-      // Step 2: Save portfolio to Supabase database using quest_portfolios table
-      const tokenSelections = selectedTokens.map((selection) => ({
-        tokenId: selection.token.id,
-        quantity: selection.quantity,
-        entryPrice: selection.token.price,
-        totalCost: selection.investmentAmount,
-      }));
-
-      const portfolioResult_db = await submitQuestPortfolio(
-        quest.id,
-        address,
-        tokenSelections,
-        portfolioResult.hash
-      );
+      const portfolioResult_db = await submitQuestPortfolio(quest.id, address);
 
       if (portfolioResult_db.success) {
         // Add to local state
@@ -241,7 +225,7 @@ export function QuestTokenSelection({
 
         // Auto-redirect after 5 seconds
         setTimeout(() => {
-          navigate(`/quests/${quest.id}`);
+          router.push(`/quests/${quest.id}`);
         }, 5000);
       } else {
         toast.warning(
@@ -312,7 +296,7 @@ export function QuestTokenSelection({
           {/* Buttons */}
           <div className="space-y-3">
             <Button
-              onClick={() => navigate(`/quests/${quest.id}`)}
+              onClick={() => router.push(`/quests/${quest.id}`)}
               className="w-full h-12 rounded-none border-2 border-blaze-black bg-blaze-orange text-blaze-black font-bold uppercase hover:bg-blaze-black hover:text-blaze-white"
             >
               Go to Quest Dashboard
@@ -411,11 +395,22 @@ export function QuestTokenSelection({
                       className="flex items-center justify-between p-4 border-2 border-blaze-black"
                     >
                       <div className="flex items-center gap-4">
-                        <img
-                          src={selection.token.logoUrl}
-                          alt={selection.token.name}
-                          className="w-12 h-12"
-                        />
+                        {selection.token.logoUrl && (
+                          <Image
+                            src={selection.token.logoUrl}
+                            alt={selection.token.name}
+                            width={48}
+                            height={48}
+                            className="w-12 h-12"
+                          />
+                        )}
+                        {!selection.token.logoUrl && (
+                          <div className="w-12 h-12 bg-blaze-black/10 flex items-center justify-center border-2 border-blaze-black">
+                            <span className="text-blaze-black/50 font-bold text-xs">
+                              {selection.token.symbol.slice(0, 2)}
+                            </span>
+                          </div>
+                        )}
                         <div>
                           <p className="font-bold text-lg">
                             {selection.token.symbol}
@@ -536,11 +531,22 @@ export function QuestTokenSelection({
                         onClick={() => !isSelected && addTokenSelection(token)}
                       >
                         <div className="flex items-center gap-3">
-                          <img
-                            src={token.logoUrl}
-                            alt={token.name}
-                            className="w-10 h-10"
-                          />
+                          {token.logoUrl && (
+                            <Image
+                              src={token.logoUrl}
+                              alt={token.name}
+                              width={40}
+                              height={40}
+                              className="w-10 h-10"
+                            />
+                          )}
+                          {!token.logoUrl && (
+                            <div className="w-10 h-10 bg-blaze-black/10 flex items-center justify-center border-2 border-blaze-black">
+                              <span className="text-blaze-black/50 font-bold text-xs">
+                                {token.symbol.slice(0, 2)}
+                              </span>
+                            </div>
+                          )}
                           <div className="flex-1">
                             <p className="font-bold text-lg">{token.symbol}</p>
                             <p className="text-sm text-blaze-black/70">
@@ -591,11 +597,22 @@ export function QuestTokenSelection({
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <img
-                              src={selection.token.logoUrl}
-                              alt={selection.token.name}
-                              className="w-8 h-8"
-                            />
+                            {selection.token.logoUrl && (
+                              <Image
+                                src={selection.token.logoUrl}
+                                alt={selection.token.name}
+                                width={32}
+                                height={32}
+                                className="w-8 h-8"
+                              />
+                            )}
+                            {!selection.token.logoUrl && (
+                              <div className="w-8 h-8 bg-blaze-black/10 flex items-center justify-center border-2 border-blaze-black">
+                                <span className="text-blaze-black/50 font-bold text-xs">
+                                  {selection.token.symbol.slice(0, 2)}
+                                </span>
+                              </div>
+                            )}
                             <span className="font-bold">
                               {selection.token.symbol}
                             </span>

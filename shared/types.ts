@@ -11,8 +11,37 @@ export interface Token {
   change24h: number;
   marketCap: number;
   logoUrl: string;
-  address?: string; // Optional token contract address
-  decimals?: number; // Optional token decimals
+  address?: string; // Token contract address (FA metadata object address)
+  decimals?: number; // Token decimals
+  description?: string; // Token description
+  creatorId?: string; // Creator user ID
+
+  // V2 Bonding Curve Fields
+  reserveRatio?: number; // Bancor reserve ratio (1-100%)
+  reserveBalance?: number; // Current APT in bonding curve reserve
+  initialReserveApt?: number; // Initial APT used to bootstrap curve
+  bondingCurveActive?: boolean; // Whether bonding curve is still active
+
+  // V2 Migration Fields
+  migrationCompleted?: boolean; // Whether token has migrated to DEX
+  migrationTimestamp?: string; // When migration occurred
+  hyperionPoolAddress?: string; // Hyperion DEX pool address after migration
+  marketCapThresholdUsd?: number; // Market cap threshold for migration (USD)
+
+  // V2 Trading Status
+  tradingEnabled?: boolean; // Whether trading is enabled
+
+  // V2 Social Links
+  socialLinks?: {
+    website?: string;
+    twitter?: string;
+    telegram?: string;
+    discord?: string;
+  };
+
+  // Timestamps
+  createdAt?: string;
+  updatedAt?: string;
 }
 export interface Quest {
   id: string;

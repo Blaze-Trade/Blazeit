@@ -2,7 +2,7 @@
 import { supabaseApi } from "./supabase-api";
 
 // This is kept for backward compatibility but now uses Supabase directly
-export async function api<T>(path: string, init?: RequestInit): Promise<T> {
+export async function api<T>(path: string): Promise<T> {
   // Parse the endpoint to determine which Supabase API to use
   const endpoint = path.replace("/api/", "");
 
@@ -26,7 +26,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
       }
 
       // Handle quest-specific endpoints
-      const questMatch = endpoint.match(/^quests\/([^\/]+)(?:\/(.+))?$/);
+      const questMatch = endpoint.match(/^quests\/([^/]+)(?:\/(.+))?$/);
       if (questMatch) {
         const questId = questMatch[1];
         const subPath = questMatch[2];
