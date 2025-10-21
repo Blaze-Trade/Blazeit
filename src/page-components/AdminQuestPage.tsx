@@ -21,7 +21,6 @@ import { toast } from "sonner";
 export function AdminQuestPage() {
   const { address, isConnected } = usePortfolioStore();
   const { quests, loading, error } = useSupabaseQuests();
-
   const ADMIN_ADDRESSES = [
     "0x9cc90ff526e7e8bdb3fc8d105b8e8abb73df9105888d46249499175c7085ef92",
   ];
